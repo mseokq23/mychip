@@ -66,6 +66,28 @@ klayout-etri designs/etri050/teg/build/teg_v0.gds          # noVNC 데스크톱�
 - 표의 W/L은 흐름 확인용 초안이다. 최종 목록은 식별가능성 분석으로 정한다.
 - 결과는 `designs/etri050/teg/build/`에 생기고 git에는 올리지 않는다(코드가 원본).
 
+### 통합 TEG 칩 v0
+
+```bash
+python3 designs/etri050/gen/etri050_teg_chip.py                  # 블록 → 배선 → DRC·LVS → 칩 GDS
+klayout-etri designs/etri050/teg/build/chip/teg_chip_v0.gds      # noVNC 데스크톱에서 보기
+```
+
+- 구성: 킷의 28핀 맨 패드 프레임(`pads_ETRI/GDS/MPW_PAD_28pin.gds`, 1.9 × 1.9 mm)에 블록 세 개를 넣는다.
+  - NMOS 행렬 8개: 게이트·소스·기판은 공유하고, 드레인은 소자마다 패드 하나
+  - PMOS 행렬 6개: 게이트·소스·N-well 공유, 드레인은 따로
+  - MOS 커패시터: NMOS 90 × 90 µm(약 25 pF), 소스·드레인·바디는 기판에 묶음(C–V용)
+- 패드 28개 중 21개를 쓰고, 7개는 다음 판(PNP, Kelvin 저항, 여분)을 위해 비운다. 패드 표(번호, 넷, 배선 길이)는 `build/chip/teg_chip_v0_pins.md`에 생긴다.
+- 소자 목록은 `designs/etri050/teg/teg_chip_v0.json`에서 바꾼다. 패드 배치 때문에 NMOS는 8개, PMOS는 6개로 고정이다.
+- 칩 배선은 전부 metal3이고, 서로 교차하지 않게 겹겹이 배치한다. 드레인 12 µm, 공유 소스 30 µm, 기판·N-well 20 µm, 게이트 4.2 µm 폭이다.
+- 검사: 블록과 코어의 Magic DRC, 코어와 칩 전체의 KLayout DRC, 코어 LVS(패드 넷을 포트로 비교), 패드 점검(쓰는 패드에는 자기 넷만, 빈 패드에는 아무것도 닿지 않음).
+- 칩 GDS는 ETRI 패드 프레임 GDS를 그대로 두고, Magic이 쓴 코어 GDS를 합친 것이다.
+- 알아둘 점
+  - ESD 보호가 없다. 게이트가 맨 패드에 바로 붙으니 칩을 다룰 때 정전기를 조심한다.
+  - 패키지 핀 번호는 ETRI 본딩도를 따른다. 보드를 만들기 전에 확인한다.
+  - 공유 소스와 드레인의 배선 저항이 측정에 들어간다. 패드 표의 square 수에 PDK의 metal 시트 저항을 곱해 보정한다.
+  - 안테나 규칙은 오픈소스 덱에 없다. 공식 Calibre 덱이나 운영 측 검증으로 확인한다.
+
 ### 마이칩 제출 조건 (ETRI 소개 자료, 2026-06 기준)
 
 - 칩 1.9 × 1.9 mm, 팀당 설계 면적 1.5 × 1.5 mm (GPIO를 쓰면 1.0 × 1.0 mm). 패키지를 하지 않으면 패드를 자유롭게 배치할 수 있다.

@@ -1,0 +1,6 @@
+{
+  "_note": "TEG chip v0 device lists. W, L in um (multiples of 0.3, W >= 1.8, L >= 0.6). The pad plan needs exactly 8 NMOS and 6 PMOS. NMOS run from the highest current (next to the shared source exit, left) to the lowest; PMOS from the lowest to the highest (source exit on the right). Draft for the layout flow: the final W/L list comes from the identifiability analysis.",
+  "nmos": [[18, 0.6], [18, 0.9], [18, 1.2], [18, 3], [3, 0.6], [18, 6], [18, 18], [3, 18]],
+  "pmos": [[3, 18], [18, 18], [3, 0.6], [18, 3], [18, 1.2], [18, 0.6]],
+  "moscap": [90, 90]
+}
