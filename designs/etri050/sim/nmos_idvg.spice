@@ -3,8 +3,8 @@
 * Vt = VG at ID = 0.1 uA x W/L (VDS = 0.1 V), at 27 C and 125 C
 * Idsat per um of width at VGS = VDS = 5 V for W/L = 20/0.5 um
 * PDK electrical targets: Vt 0.70 +/- 0.1 V (W/L 20/20 and 20/0.5), Idsat 550 +/- 50 uA/um (20/0.5)
-* Note: the model header says temperature parameters are not included yet,
-*       so treat the 125 C numbers as the model's guess, not as measured behaviour.
+* Note: ETRI's intro (2026-06) says the model covers 25-125 C, but the model file header
+*       still says temperature parameters are not included - check 125 C against measurement.
 
 .include ../../../.pdk/ETRI050_DesignKit/spice/05cmos_model_240201.lib
 

@@ -30,7 +30,8 @@ designs/tinytapeout/              Tiny Tapeout 작업 폴더
 | `klayout-etri [file.gds]` | ETRI 레이어 색으로 KLayout 실행 |
 | `xschem-etri [file.sch]` | ETRI용 설정(`designs/etri050/xschemrc`)으로 Xschem 실행 |
 | `etri-drc <cell>` | 현재 폴더 `<cell>.mag`의 Magic DRC |
-| `etri-gds <cell>` | `<cell>.mag` → `<cell>.gds` |
+| `etri-gds <cell>` | `<cell>.mag` → `<cell>.gds` (ETRI 층 번호로 출력) |
+| `etri-gds-read <file.gds>` | KLayout 등에서 만든 ETRI GDS를 Magic 셀(.mag)로 가져오기 |
 | `etri-drc-klayout <file.gds>` | KLayout DRC (킷의 NSPL 규칙 v1.1 덱) |
 | `etri-lvs <cell> <schematic.spice> [subckt]` | Magic 추출 → Netgen LVS |
 
@@ -42,11 +43,19 @@ designs/tinytapeout/              Tiny Tapeout 작업 폴더
   모델은 코드 블록에 `format="tcleval( @value )"`, `value=".include $::ETRI050_MODEL"`로 넣는다.
 - **패드 프레임:** `.pdk/ETRI050_DesignKit/pads_ETRI/GDS/MPW_PAD_28pin.gds` (1.9 × 1.9 mm, 패드 28개)
 
+### 마이칩 제출 조건 (ETRI 소개 자료, 2026-06 기준)
+
+- 칩 1.9 × 1.9 mm, 팀당 설계 면적 1.5 × 1.5 mm (GPIO를 쓰면 1.0 × 1.0 mm). 패키지를 하지 않으면 패드를 자유롭게 배치할 수 있다.
+- 설계를 끝낸 뒤 신청서와 설계 DB를 모아팹에 팀 단위로 접수한다. 칩은 DB 제출 약 5개월 뒤에 받는다.
+- 팀당 패키지 칩 20개(28-pin SOP)와 bare die 30개를 받는다. 측정할 때는 패키지 윗면을 검은 테이프 등으로 가려 빛을 막는다.
+- 공식 검증 덱은 Calibre·Assura용이다. 이 환경의 Magic·KLayout 검사는 오픈소스 변환본이니, 제출 전 검증 절차는 공고문으로 확인한다.
+
 ### 주의
 
 - 킷의 `sch/fet_models.sym`에는 MOSIS AMI C5 모델이 들어 있다. ETRI 결과가 아니니, 반드시 `spice/05cmos_model_240201.lib`(소자 이름 nfet/pfet)를 쓴다.
 - 공식 PDK(260820)의 모델 파일 `05cmos_model_260210`은 소자 이름이 nmos4/pmos4다. Magic 추출 이름(nfet/pfet)과 섞으면 LVS가 어긋난다.
-- 모델 머리말에 온도 파라미터가 포함되지 않았다고 적혀 있다. 125 °C 결과는 모델의 추정일 뿐이다.
+- Magic에서 `gds write`를 직접 칠 때는 먼저 `cif ostyle lambda=0.30(ETRI)`를 지정한다. 기본 스타일은 MOSIS 층 번호(41, 43, …)로 써서 ETRI 제출용이 아니다. `etri-gds`는 이걸 자동으로 한다. 패드 프레임처럼 이미 ETRI 층인 GDS를 그대로 합칠 때는 킷의 `scripts/generate_chip.sh`처럼 `lambda=0.30(ETRI-G)` 스타일을 쓴다.
+- 온도 특성: ETRI 소개 자료(2026-06)는 모델에 25~125 °C 온도 파라미터가 있다고 밝히지만, 모델 파일 머리말에는 아직 미포함이라고 적혀 있다. 125 °C 결과는 실측으로 확인하기 전까지 모델 값으로만 본다.
 - `etri-lvs`는 추출 결과를 `<cell>.spice`로 저장한다. 회로도 넷리스트는 다른 폴더(예: `netlist/`)에 두고, Xschem에서는 top level을 `.subckt`로 감싼 LVS용 넷리스트를 뽑는다.
 - 오픈소스 DRC 덱은 공식 Calibre 규칙을 옮긴 것이다. 최종 제출 전 검증 절차는 운영 측 안내를 따른다.
 - 이 이미지의 qflow는 변환 도구 용도라, 킷의 ETRI용 디지털 자동 배치배선 흐름은 이 설정에서 다루지 않는다. 이 설정은 풀커스텀 기준이다.

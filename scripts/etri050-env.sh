@@ -6,7 +6,8 @@
 #   klayout-etri [file.gds]                   KLayout with the ETRI layer colours
 #   xschem-etri [file.sch]                    Xschem with designs/etri050/xschemrc
 #   etri-drc <cell>                           Magic DRC of <cell>.mag (current directory)
-#   etri-gds <cell>                           write <cell>.gds from <cell>.mag
+#   etri-gds <cell>                           write <cell>.gds (ETRI layer numbers) from <cell>.mag
+#   etri-gds-read <file.gds>                  import an ETRI GDS (e.g. from KLayout) into .mag cells
 #   etri-drc-klayout <file.gds> [report]      KLayout DRC with the NSPL rule deck (v1.1)
 #   etri-lvs <cell> <schematic.spice> [sub]   Magic extraction + Netgen LVS
 
@@ -45,9 +46,22 @@ EOF
 
 etri-gds() {
   local cell="${1:?usage: etri-gds <cell>   (writes <cell>.gds from <cell>.mag)}"
+  # Magic's default output style uses MOSIS layer numbers; ETRI needs lambda=0.30(ETRI).
   magic -dnull -noconsole -rcfile "$ETRI050_MAGICRC" <<EOF
 load ${cell} -force
+cif ostyle lambda=0.30(ETRI)
 gds write ${cell}.gds
+quit -noprompt
+EOF
+}
+
+etri-gds-read() {
+  local gds="${1:?usage: etri-gds-read <file.gds>   (GDS with ETRI layer numbers -> .mag cells here)}"
+  # For layouts made in KLayout / gdsfactory: import, then use etri-drc / etri-lvs on the top cell.
+  magic -dnull -noconsole -rcfile "$ETRI050_MAGICRC" <<EOF
+cif istyle lambda=0.30(ETRI)
+gds read ${gds}
+writeall force
 quit -noprompt
 EOF
 }
