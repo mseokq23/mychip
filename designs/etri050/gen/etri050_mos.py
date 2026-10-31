@@ -93,36 +93,48 @@ class Mos:
         return to_lambda(self.l_um, "L", 2)
 
     # ---- geometry (lambda, origin at the lower-left of the active area) ----
-    def rects(self):
-        """[(magic_layer, x0, y0, x1, y1, label_or_None)] in drawing order."""
+    @property
+    def xact(self) -> int:
+        """Width of the active area: S contact, gap, gate, gap, D contact."""
+        return 2 * CONTACT + 2 * GATE_GAP + self.l
+
+    @property
+    def gate_contact(self):
+        """(x0, y0, x1, y1) of the poly contact above the gate."""
+        pc_w = max(CONTACT, self.l)
+        px0 = CONTACT + GATE_GAP - (pc_w - self.l) // 2
+        return px0, self.w + PC_GAP, px0 + pc_w, self.w + PC_GAP + CONTACT
+
+    def device_rects(self):
+        """The transistor alone (no body tap, well or labels), terminals marked D, G, S."""
         k = KINDS[self.kind]
-        w, l = self.w, self.l
         gx0 = CONTACT + GATE_GAP
-        gx1 = gx0 + l
-        xact = gx1 + GATE_GAP + CONTACT
-        pc_w = max(CONTACT, l)
-        px0 = gx0 - (pc_w - l) // 2
-        pc_y0 = w + PC_GAP
+        gx1 = gx0 + self.l
+        px0, py0, px1, py1 = self.gate_contact
+        return [
+            (k["diff"], 0, 0, self.xact, self.w, None),
+            (k["sd"], gx1 + GATE_GAP, 0, self.xact, self.w, "D"),
+            ("polysilicon", gx0, -ENDCAP, gx1, py0, None),
+            ("polycontact", px0, py0, px1, py1, "G"),
+            (k["sd"], 0, 0, CONTACT, self.w, "S"),
+        ]
+
+    def rects(self):
+        """Stand-alone cell: [(magic_layer, x0, y0, x1, y1, label_or_None)] in drawing order."""
+        k = KINDS[self.kind]
         tap_y1 = -ENDCAP - TAP_GAP
         tap_y0 = tap_y1 - CONTACT
         out = []
         if k["well"]:
             x0, y0, x1, y1 = self.active_bbox()
             out.append((k["well"], x0 - WELL_ENC, y0 - WELL_ENC, x1 + WELL_ENC, y1 + WELL_ENC, None))
-        out += [
-            (k["diff"], 0, 0, xact, w, None),
-            (k["sd"], gx1 + GATE_GAP, 0, xact, w, "D"),
-            ("polysilicon", gx0, -ENDCAP, gx1, pc_y0, None),
-            ("polycontact", px0, pc_y0, px0 + pc_w, pc_y0 + CONTACT, "G"),
-            (k["sd"], 0, 0, CONTACT, w, "S"),
-            (k["tap"], 0, tap_y0, xact, tap_y1, "B"),
-        ]
+        out += self.device_rects()
+        out.append((k["tap"], 0, tap_y0, self.xact, tap_y1, "B"))
         return out
 
     def active_bbox(self):
         """Bounding box of the ACT shapes (device + tap) in lambda."""
-        xact = 2 * CONTACT + 2 * GATE_GAP + self.l
-        return 0, -ENDCAP - TAP_GAP - CONTACT, xact, self.w
+        return 0, -ENDCAP - TAP_GAP - CONTACT, self.xact, self.w
 
     def bbox(self):
         xs, ys = [], []
