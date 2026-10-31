@@ -1,0 +1,9 @@
+# ETRI design kit (fetched by scripts/setup-etri050.sh)
+.pdk/
+
+# tool outputs
+*.ext
+*.raw
+*_lvs.out
+*.lyrdb
+designs/etri050/netlist/

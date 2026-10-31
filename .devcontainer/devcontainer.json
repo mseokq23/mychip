@@ -1,0 +1,37 @@
+// IIC-OSIC-TOOLS in GitHub Codespaces with a browser desktop (noVNC)
+// for MyChip (ETRI 0.5 um) and Tiny Tapeout full-custom layout, DRC and LVS.
+{
+  "name": "IIC-OSIC-TOOLS - MyChip ETRI 0.5um + Tiny Tapeout",
+
+  // Official devcontainer variant of IIC-OSIC-TOOLS (adds a real "designer" user).
+  // Once everything works, pin a dated tag instead of "latest" so the tools stay fixed.
+  "image": "hpretl/iic-osic-tools-devcontainer:latest",
+
+  // Minimum machine. Pick 4-core when creating the codespace if the desktop feels slow.
+  "hostRequirements": { "cpus": 2, "memory": "8gb", "storage": "32gb" },
+
+  "containerEnv": {
+    "NO_VNC_PORT": "6080",          // noVNC web client port (unprivileged, easy to forward)
+    "XKB_KEYBOARD_LAYOUT": "us",
+    "XKB_KEYBOARD_VARIANT": "",
+    "TZ": "Asia/Seoul"
+  },
+
+  // GUI programs started from VS Code terminals appear on the noVNC desktop.
+  "remoteEnv": { "DISPLAY": ":1" },
+
+  "forwardPorts": [6080],
+  "portsAttributes": {
+    "6080": { "label": "EDA Desktop (noVNC)", "onAutoForward": "openBrowserOnce" }
+  },
+
+  // Once per codespace: fetch the ETRI 0.5 um open-source design kit and wire it up.
+  "postCreateCommand": "bash scripts/setup-etri050.sh",
+  // Every start (also after a stop/resume): bring up Xvnc + XFCE + noVNC.
+  "postStartCommand": "bash .devcontainer/start-desktop.sh",
+
+  "customizations": {
+    "codespaces": { "openFiles": ["README.md"] },
+    "vscode": { "extensions": ["mshr-h.veriloghdl"] }
+  }
+}

@@ -1,0 +1,33 @@
+* ETRI 0.5 um NMOS check with the open-source kit model (nfet, BSIM3v3.2)
+* run:  cd designs/etri050/sim && ngspice -b nmos_idvg.spice
+* Vt = VG at ID = 0.1 uA x W/L (VDS = 0.1 V), at 27 C and 125 C
+* Idsat per um of width at VGS = VDS = 5 V for W/L = 20/0.5 um
+* PDK electrical targets: Vt 0.70 +/- 0.1 V (W/L 20/20 and 20/0.5), Idsat 550 +/- 50 uA/um (20/0.5)
+* Note: the model header says temperature parameters are not included yet,
+*       so treat the 125 C numbers as the model's guess, not as measured behaviour.
+
+.include ../../../.pdk/ETRI050_DesignKit/spice/05cmos_model_240201.lib
+
+VG  g   0 0
+VD1 d1  0 0.1
+VD2 d2  0 0.1
+VD3 d3  0 5
+M1  d1 g 0 0 nfet W=20u L=20u
+M2  d2 g 0 0 nfet W=20u L=0.5u
+M3  d3 g 0 0 nfet W=20u L=0.5u
+
+.control
+foreach t 27 125
+  option temp=$t
+  dc VG 0 5.01 0.005
+  let id1 = -i(VD1)
+  let id2 = -i(VD2)
+  let id3 = -i(VD3)
+  meas dc vt_long  find v(g) when id1=1e-7
+  meas dc vt_short find v(g) when id2=4e-6
+  meas dc idsat    find id3 at=5
+  let idsat_um = idsat / 20 * 1e6
+  echo "T = $t C : Vt(20/20) = $&vt_long V   Vt(20/0.5) = $&vt_short V   Idsat(20/0.5) = $&idsat_um uA/um"
+end
+.endc
+.end

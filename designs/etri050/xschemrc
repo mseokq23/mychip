@@ -1,0 +1,23 @@
+# Xschem startup for the ETRI 0.5 um open-source kit.  Start with: xschem-etri
+#
+# Transistors: generic devices nmos4.sym / pmos4.sym (or nmos-sub.sym / pmos-sub.sym)
+#   with model=nfet / model=pfet - the names used by the ETRI model file and by Magic extraction.
+# Models: put a code block (code_shown.sym) in the testbench with
+#   value="tcleval(.include $::ETRI050_MODEL)"
+# Do NOT use sch/fet_models.sym from the kit: it embeds the MOSIS AMI C5 model, not ETRI's.
+
+set XSCHEM_LIBRARY_PATH {}
+append XSCHEM_LIBRARY_PATH ${XSCHEM_SHAREDIR}/xschem_library/devices
+append XSCHEM_LIBRARY_PATH :${XSCHEM_SHAREDIR}/xschem_library
+append XSCHEM_LIBRARY_PATH :[file dirname [file normalize [info script]]]
+
+if {[info exists env(ETRI050_DK)]} {
+  set ETRI050_DK $env(ETRI050_DK)
+} else {
+  set ETRI050_DK [file normalize [file dirname [file normalize [info script]]]/../../.pdk/ETRI050_DesignKit]
+}
+set ETRI050_MODEL $ETRI050_DK/spice/05cmos_model_240201.lib
+append XSCHEM_LIBRARY_PATH :$ETRI050_DK/sch
+
+# Netlists go to designs/etri050/netlist (kept out of git by .gitignore).
+set netlist_dir [file dirname [file normalize [info script]]]/netlist
