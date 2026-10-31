@@ -20,6 +20,14 @@ designs/tinytapeout/              Tiny Tapeout 작업 폴더
 
 포트는 기본이 비공개라 본인 GitHub 계정으로만 열린다. Public으로 바꾸지 않는다.
 
+### 설치 확인
+
+```bash
+bash scripts/smoke-test.sh
+```
+
+NMOS 하나(W/L = 3/0.6 µm)를 코드로 그려 흐름 전체를 돌린다. 도구·킷 파일, ngspice 예제(Vt), Xschem 넷리스트, Magic DRC, GDS 층 번호(ACT 11, POLY1 12, CONT 31), KLayout DRC, LVS(소자·W/L·핀), noVNC 포트를 검사하고 끝에 `SMOKE TEST: N passed, …`를 출력한다. 결과 파일은 `/tmp/etri050-smoke`에 남는다.
+
 ## 2. ETRI 0.5 µm 작업
 
 새 터미널(데스크톱 터미널이나 VS Code 터미널)에서 쓰는 명령이다. VS Code 터미널에서 실행한 GUI도 noVNC 데스크톱에 뜬다(`DISPLAY=:1`).
@@ -57,6 +65,7 @@ designs/tinytapeout/              Tiny Tapeout 작업 폴더
 - Magic에서 `gds write`를 직접 칠 때는 먼저 `cif ostyle lambda=0.30(ETRI)`를 지정한다. 기본 스타일은 MOSIS 층 번호(41, 43, …)로 써서 ETRI 제출용이 아니다. `etri-gds`는 이걸 자동으로 한다. 패드 프레임처럼 이미 ETRI 층인 GDS를 그대로 합칠 때는 킷의 `scripts/generate_chip.sh`처럼 `lambda=0.30(ETRI-G)` 스타일을 쓴다.
 - 온도 특성: ETRI 소개 자료(2026-06)는 모델에 25~125 °C 온도 파라미터가 있다고 밝히지만, 모델 파일 머리말에는 아직 미포함이라고 적혀 있다. 125 °C 결과는 실측으로 확인하기 전까지 모델 값으로만 본다.
 - `etri-lvs`는 추출 결과를 `<cell>.spice`로 저장한다. 회로도 넷리스트는 다른 폴더(예: `netlist/`)에 두고, Xschem에서는 top level을 `.subckt`로 감싼 LVS용 넷리스트를 뽑는다.
+- LVS에서 핀 이름까지 비교하려면 레이아웃의 라벨을 포트로 만든다. Magic 명령창에서 셀 전체를 box로 덮고 `port makeall`을 실행한 뒤 저장한다. 포트가 없으면 `etri-lvs`는 소자와 연결만 비교하고 그 사실을 알려 준다. 결과 줄은 `ETRI-LVS <cell>: MATCH`이고, W/L이 다르면 `MATCH but property errors`로 나온다.
 - 오픈소스 DRC 덱은 공식 Calibre 규칙을 옮긴 것이다. 최종 제출 전 검증 절차는 운영 측 안내를 따른다.
 - 이 이미지의 qflow는 변환 도구 용도라, 킷의 ETRI용 디지털 자동 배치배선 흐름은 이 설정에서 다루지 않는다. 이 설정은 풀커스텀 기준이다.
 

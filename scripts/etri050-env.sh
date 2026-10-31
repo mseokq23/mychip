@@ -75,17 +75,33 @@ etri-drc-klayout() {
 
 etri-lvs() {
   local usage="usage: etri-lvs <cell> <schematic.spice> [schematic_subckt]"
-  local cell="${1:?$usage}" sch="${2:?$usage}" sub="${3:-$1}"
+  local cell="${1:?$usage}" sch="${2:?$usage}" sub="${3:-$1}" lay out="${1}_lvs.out" verdict
   # Extraction writes <cell>.spice next to <cell>.mag: keep the schematic netlist elsewhere.
-  magic -dnull -noconsole -rcfile "$ETRI050_MAGICRC" <<EOF
+  magic -dnull -noconsole -rcfile "$ETRI050_MAGICRC" >"${cell}_ext.log" 2>&1 <<EOF
 load ${cell} -force
 extract all
 ext2spice lvs
-ext2spice subcircuit top off
 ext2spice
 quit -noprompt
 EOF
-  _etri_netgen -batch lvs "${cell}.spice ${cell}" "${sch} ${sub}" "$ETRI050_NETGEN_SETUP" "${cell}_lvs.out" >/dev/null
-  grep -E "Netlists match|Netlists do not match|Circuits match|do not match" "${cell}_lvs.out" | tail -n 2
-  echo "details: ${cell}_lvs.out"
+  # A cell with ports is written as ".subckt <cell> <pins>", and Netgen also compares the pins.
+  # Without ports the netlist is a bare top level: only devices and nets can be compared.
+  if grep -qiE "^\.subckt[[:space:]]+${cell}([[:space:]]|$)" "${cell}.spice"; then
+    lay="${cell}.spice ${cell}"
+  else
+    lay="${cell}.spice"
+    echo "note: ${cell} has no ports, so pin names are not compared (Magic: box over the cell, then 'port makeall')"
+  fi
+  _etri_netgen -batch lvs "$lay" "${sch} ${sub}" "$ETRI050_NETGEN_SETUP" "$out" >/dev/null
+  if grep -qE "do not match|failed pin matching|with port errors" "$out"; then
+    verdict="MISMATCH"
+  elif grep -qE "Circuits match|Netlists match" "$out"; then
+    verdict="MATCH"
+    if grep -qE "Property errors were found|There were property errors" "$out"; then
+      verdict="MATCH but property errors (W, L, ...)"
+    fi
+  else
+    verdict="no result"
+  fi
+  echo "ETRI-LVS ${cell}: ${verdict}   (details: ${out})"
 }
