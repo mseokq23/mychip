@@ -84,6 +84,7 @@ klayout-etri designs/etri050/teg/build/teg_v0.gds          # noVNC 데스크톱�
 - 오픈소스 DRC 덱은 공식 Calibre 규칙을 옮긴 것이다. 최종 제출 전 검증 절차는 운영 측 안내를 따른다.
 - KLayout 덱(`etri_05um_generated_final.drc`)에는 poly 엔드캡, 게이트 밖 ACT 길이, ACT 컨택–게이트 간격, NSD/PSD의 ACT 감쌈 같은 규칙이 없다. 그래서 Magic DRC(λ 규칙, 더 보수적)와 함께 돌린다. `etri-check`가 둘 다 한다.
 - ngspice-47(이 이미지)은 `echo` 출력에서 `=` 앞뒤 공백을 지운다. 출력을 파싱할 때 공백이 있다고 가정하지 않는다.
+- 이미지의 기본 PDK는 IHP SG13G2라서 그냥 `klayout`을 열면 SG13G2 메뉴와 technology가 붙는다. ETRI 레이아웃은 `klayout-etri`로 연다(IHP 설정을 빼고 ETRI 레이어 색, 전체 계층 표시로 연다).
 - 이 이미지의 qflow는 변환 도구 용도라, 킷의 ETRI용 디지털 자동 배치배선 흐름은 이 설정에서 다루지 않는다. 이 설정은 풀커스텀 기준이다.
 
 ## 3. Tiny Tapeout
