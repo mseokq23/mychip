@@ -93,6 +93,7 @@ class Exit:
     x: int
     y: int
     side: str           # direction the route leaves the block: up, down, left, right
+    hw: int = VIA // 2  # half width of its via2 tile across the exit direction
 
 
 @dataclass
@@ -114,7 +115,7 @@ class Block:
         flip = {"up": "down", "down": "up"}
         b = Block(self.name)
         b.shapes = [(n, l, x0, -y1, x1, -y0) for n, l, x0, y0, x1, y1 in self.shapes]
-        b.exits = {k: Exit(e.x, -e.y, flip.get(e.side, e.side)) for k, e in self.exits.items()}
+        b.exits = {k: Exit(e.x, -e.y, flip.get(e.side, e.side), e.hw) for k, e in self.exits.items()}
         x0, y0, x1, y1 = self.ring
         b.ring = (x0, -y1, x1, -y0)
         return b
@@ -123,7 +124,7 @@ class Block:
         """Shapes and exits moved by (dx, dy), block nets renamed to chip nets."""
         shapes = [(rename.get(n, n), l, x0 + dx, y0 + dy, x1 + dx, y1 + dy)
                   for n, l, x0, y0, x1, y1 in self.shapes]
-        exits = {rename.get(k, k): Exit(e.x + dx, e.y + dy, e.side) for k, e in self.exits.items()}
+        exits = {rename.get(k, k): Exit(e.x + dx, e.y + dy, e.side, e.hw) for k, e in self.exits.items()}
         x0, y0, x1, y1 = self.ring
         return shapes, exits, (x0 + dx, y0 + dy, x1 + dx, y1 + dy)
 
@@ -179,7 +180,7 @@ def matrix_block(name, kind, devs, exit_side):
     xs = [i * PITCH for i in range(len(devs))]
     wmax = max(d.w for d in devs)
     sy1, sy0 = -4, -44                  # source bus (1.2 um clear of the drain contacts)
-    gy0 = wmax + 12                     # gate bus, 3+ lambda above every drain via
+    gy0, gb = wmax + 12, 9              # gate bus, 3+ lambda above every drain via
     via_tops = []
     for i, (d, x) in enumerate(zip(devs, xs)):
         dn = f"D{i + 1}"
@@ -196,21 +197,24 @@ def matrix_block(name, kind, devs, exit_side):
     g_x0 = min(x + d.gate_contact[0] for d, x in zip(devs, xs))
     g_x1 = max(x + d.gate_contact[2] for d, x in zip(devs, xs))
     d_x1 = max(x + d.xact + 11 for d, x in zip(devs, xs))             # right edge of the drain vias
+    # Bus vias sit inside the bus metal on every side: Magic's ETRI style trims a via's metal1
+    # by 0.05 um where no metal1 touches it, which would leave sub-0.8 um slivers at the bus ends.
     if exit_side == "left":
         bus_x0 = xs[0] - EXT
-        b.add("G", "metal1", bus_x0, gy0, g_x1, gy0 + 6)
+        b.add("G", "metal1", bus_x0, gy0, g_x1, gy0 + gb)
         b.add("S", "metal1", bus_x0, sy0, xs[-1] + CW, sy1)
-        b.add("G", "m2contact", bus_x0, gy0, bus_x0 + 7, gy0 + 7)
-        b.add("S", "m2contact", bus_x0, sy0 + 2, bus_x0 + VIA, sy1 - 2)
+        g_via, s_via = (bus_x0 + 3, bus_x0 + 10), (bus_x0 + 4, bus_x0 + 4 + VIA)
         x_in0, x_in1 = bus_x0 - 6, max(d_x1, g_x1) + 8
     else:
         bus_x1 = d_x1 + EXT
-        b.add("G", "metal1", g_x0, gy0, bus_x1, gy0 + 6)
+        b.add("G", "metal1", g_x0, gy0, bus_x1, gy0 + gb)
         b.add("S", "metal1", xs[0], sy0, bus_x1, sy1)
-        b.add("G", "m2contact", bus_x1 - 7, gy0, bus_x1, gy0 + 7)
-        b.add("S", "m2contact", bus_x1 - VIA, sy0 + 2, bus_x1, sy1 - 2)
+        g_via, s_via = (bus_x1 - 10, bus_x1 - 3), (bus_x1 - 4 - VIA, bus_x1 - 4)
         x_in0, x_in1 = xs[0] - 8, bus_x1 + 6
-    y_in0, y_in1 = sy0 - 6, gy0 + 12
+    ym = (sy0 + sy1) // 2
+    b.add("G", "m2contact", g_via[0], gy0 + 1, g_via[1], gy0 + 8)
+    b.add("S", "m2contact", s_via[0], ym - 13, s_via[1], ym + 13)
+    y_in0, y_in1 = sy0 - 6, gy0 + gb + 5
     add_ring(b, kind, x_in0, y_in0, x_in1, y_in1)
     # drain exits: metal2 up across the gate bus and the ring, via2 just outside
     ye = y_in1 + CW + 4
@@ -221,16 +225,18 @@ def matrix_block(name, kind, devs, exit_side):
     # gate and source exits on the exit side: metal2 from the bus via across the ring, via2 outside
     if exit_side == "left":
         xo0, xo1 = x_in0 - CW - 4 - VIA, x_in0 - CW - 4
-        strip_x0, strip_x1, xe = xo0, bus_x0, xo0
+        gs, ss, xe = (xo0, g_via[0]), (xo0, s_via[0]), xo0
     else:
         xo0, xo1 = x_in1 + CW + 4, x_in1 + CW + 4 + VIA
-        strip_x0, strip_x1, xe = bus_x1, xo1, xo1
-    b.add("G", "metal2", strip_x0, gy0, strip_x1, gy0 + 7)
-    b.add("G", "m3contact", xo0, gy0 - 4, xo1, gy0 + 10)
-    b.exits["G"] = Exit(xe, gy0 + 3, exit_side)
-    b.add("S", "metal2", strip_x0, sy0 + 2, strip_x1, sy1 - 2)
-    b.add("S", "m3contact", xo0, sy0 + 2, xo1, sy1 - 2)
-    b.exits["S"] = Exit(xe, (sy0 + sy1) // 2, exit_side)
+        gs, ss, xe = (g_via[1], xo1), (s_via[1], xo1), xo1
+    # Source via1, strip and via2 share one height (26 lambda): where a strip is taller than the
+    # via it meets, Magic's 0.05 um trim of the via's free edges leaves sub-1.0 um metal2 teeth.
+    b.add("G", "metal2", gs[0], gy0 + 1, gs[1], gy0 + 8)
+    b.add("G", "m3contact", xo0, gy0 - 3, xo1, gy0 + 11)
+    b.exits["G"] = Exit(xe, gy0 + 4, exit_side)
+    b.add("S", "metal2", ss[0], ym - 13, ss[1], ym + 13)
+    b.add("S", "m3contact", xo0, ym - 13, xo1, ym + 13)
+    b.exits["S"] = Exit(xe, ym, exit_side, 13)
     # guard ring exit (down), set back from the exit-side corner
     x_r = x_in0 + 40 if exit_side == "left" else x_in1 - 40 - VIA
     ring_exit_down(b, x_r, y_in0 - CW)
@@ -284,15 +290,33 @@ def path(net, pts, w, start_ext=7):
     return out
 
 
+def from_exit(net, e, rest, w):
+    """Route leaving exit e: a narrow neck around the via2 tile, then the path through `rest`.
+
+    The kit deck checks VIA2 enclosure against metal3 *narrower than 10 um* (MET3UN10), so a
+    wide route laid over a via would cut the via's enclosure. The neck (via2 tile + 2 lambda,
+    under 10 um wide) holds the via; the wide route starts 4 lambda beyond the tile.
+    """
+    d = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}[e.side]
+    a = e.hw + 2
+    x0, x1 = sorted((e.x - d[0] * (VIA + 2), e.x + d[0] * 4)) if d[0] else (e.x - a, e.x + a)
+    y0, y1 = sorted((e.y - d[1] * (VIA + 2), e.y + d[1] * 4)) if d[1] else (e.y - a, e.y + a)
+    start = (e.x + d[0] * 4, e.y + d[1] * 4)
+    return [(net, "metal3", x0, y0, x1, y1)] + path(net, [start] + rest, w, start_ext=0)
+
+
 def fanout(nets, side_y, toward, end_y, side_targets):
     """Nested fan-out from block exits (all at y = side_y) to pads on the bottom/top side.
 
-    nets: [(net, x_exit, pad_or_side_target, width)] ; toward = -1 (down) or +1 (up).
+    nets: [(net, exit, pad_or_side_target, width)] ; toward = -1 (down) or +1 (up).
     Outer nets take the tracks closest to the block, so no two routes cross.
     side_targets: {net: (column_x, pad_y, end_x)} for nets that end on a left/right pad.
     """
     left, right, straight, routes = [], [], [], []
-    for net, x, target, w in nets:
+    ex = {}
+    for net, e, target, w in nets:
+        x = e.x
+        ex[net] = e
         if net in side_targets:
             (left if side_targets[net][0] < x else right).append((net, x, None, w))
             continue
@@ -308,13 +332,13 @@ def fanout(nets, side_y, toward, end_y, side_targets):
         for k, (net, x, px, w) in enumerate(group):
             t = side_y + toward * (TRACK0 + k * TRACK)
             if px is None:
-                col, py, ex = side_targets[net]
-                pts = [(x, side_y), (x, t), (col, t), (col, py), (ex, py)]
+                col, py, xend = side_targets[net]
+                rest = [(x, t), (col, t), (col, py), (xend, py)]
             else:
-                pts = [(x, side_y), (x, t), (px, t), (px, end_y)]
-            routes += path(net, pts, w)
+                rest = [(x, t), (px, t), (px, end_y)]
+            routes += from_exit(net, ex[net], rest, w)
     for net, x, px, w in straight:
-        routes += path(net, [(x, side_y), (x, end_y)], w)
+        routes += from_exit(net, ex[net], [(x, end_y)], w)
     return routes
 
 
@@ -369,27 +393,27 @@ def build(cfg):
     py = {p: pad_center(p)[1] for p in ("L4", "L5", "L6", "R1", "R2", "R5", "R6", "R7")}
 
     # bottom fan-out: NMOS drains + capacitor gate
-    nets = [(f"ND{i + 1}", n_ex[f"ND{i + 1}"].x, plan[f"ND{i + 1}"], W_D) for i in range(8)]
-    nets.append(("CAP", c_ex["CAP"].x, "R2", W_G))
+    nets = [(f"ND{i + 1}", n_ex[f"ND{i + 1}"], plan[f"ND{i + 1}"], W_D) for i in range(8)]
+    nets.append(("CAP", c_ex["CAP"], "R2", W_G))
     core += fanout(nets, y_bot, -1, end_lo,
                    {"ND8": (col_r[0], py["R1"], x_rend), "CAP": (col_r[2], py["R2"], x_rend)})
     # NMOS gate / source to the left pads, substrate from the top of the ring
     e = n_ex["NG"]
-    core += path("NG", [(e.x, e.y), (col_l[0], e.y), (col_l[0], py["L6"]), (x_lend, py["L6"])], W_G)
+    core += from_exit("NG", e, [(col_l[0], e.y), (col_l[0], py["L6"]), (x_lend, py["L6"])], W_G)
     e = n_ex["NS"]
-    core += path("NS", [(e.x, e.y), (col_l[1], e.y), (col_l[1], py["L5"]), (x_lend, py["L5"])], W_SRC)
+    core += from_exit("NS", e, [(col_l[1], e.y), (col_l[1], py["L5"]), (x_lend, py["L5"])], W_SRC)
     e = n_ex["SUB"]
-    core += path("SUB", [(e.x, e.y), (e.x, py["L4"]), (x_lend, py["L4"])], W_PWR)
+    core += from_exit("SUB", e, [(e.x, py["L4"]), (x_lend, py["L4"])], W_PWR)
     # top fan-out: PMOS drains
-    nets = [(f"PD{i + 1}", p_ex[f"PD{i + 1}"].x, plan[f"PD{i + 1}"], W_D) for i in range(6)]
+    nets = [(f"PD{i + 1}", p_ex[f"PD{i + 1}"], plan[f"PD{i + 1}"], W_D) for i in range(6)]
     core += fanout(nets, y_top, +1, end_hi, {})
     # PMOS gate / source to the right pads, N-well from the bottom of the ring
     e = p_ex["PG"]
-    core += path("PG", [(e.x, e.y), (col_r[0], e.y), (col_r[0], py["R7"]), (x_rend, py["R7"])], W_G)
+    core += from_exit("PG", e, [(col_r[0], e.y), (col_r[0], py["R7"]), (x_rend, py["R7"])], W_G)
     e = p_ex["PS"]
-    core += path("PS", [(e.x, e.y), (col_r[1], e.y), (col_r[1], py["R6"]), (x_rend, py["R6"])], W_SRC)
+    core += from_exit("PS", e, [(col_r[1], e.y), (col_r[1], py["R6"]), (x_rend, py["R6"])], W_SRC)
     e = p_ex["NW"]
-    core += path("NW", [(e.x, e.y), (e.x, py["R5"]), (x_rend, py["R5"])], W_PWR)
+    core += from_exit("NW", e, [(e.x, py["R5"]), (x_rend, py["R5"])], W_PWR)
 
     shapes = n_shapes + c_shapes + p_shapes + core
     devices = ([(f"ND{i + 1}", "NG", "NS", "SUB", d) for i, d in enumerate(nm)]
