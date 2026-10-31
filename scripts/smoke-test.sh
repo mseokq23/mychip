@@ -40,8 +40,9 @@ else
 fi
 
 # 3. ngspice example: Vt(20/20 um) at 27 C should be near the 0.70 V target --
-line=$(cd "$WS/designs/etri050/sim" && ngspice -b nmos_idvg.spice 2>/dev/null | grep '^T = 27')
-vt=$(printf '%s' "$line" | sed -n 's/.*Vt(20\/20) = \([-0-9.eE+]*\) V.*/\1/p')
+# (ngspice-47 drops the spaces around "=" in echo output, older versions keep them)
+line=$(cd "$WS/designs/etri050/sim" && ngspice -b nmos_idvg.spice 2>/dev/null | grep -E '^T ?= ?27 ')
+vt=$(printf '%s' "$line" | sed -n 's/.*Vt(20\/20) *= *\([-0-9.eE+]*\) V.*/\1/p')
 if [ -n "$vt" ] && awk -v v="$vt" 'BEGIN { exit !(v > 0.60 && v < 0.80) }'; then
   pass "ngspice example: Vt(20/20) = $vt V at 27 C"
 else

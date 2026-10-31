@@ -7,3 +7,5 @@
 *_lvs.out
 *.lyrdb
 designs/etri050/netlist/
+designs/etri050/teg/build/
+__pycache__/
