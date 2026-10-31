@@ -10,6 +10,7 @@
 #   etri-gds-read <file.gds>                  import an ETRI GDS (e.g. from KLayout) into .mag cells
 #   etri-drc-klayout <file.gds> [report]      KLayout DRC with the NSPL rule deck (v1.1)
 #   etri-lvs <cell> <schematic.spice> [sub]   Magic extraction + Netgen LVS
+#   etri-check <cell> [schematic.spice]       all of the above in one line: DRC x2, GDS, LVS
 
 _etri_ws="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export ETRI050_DK="${ETRI050_DK:-$_etri_ws/.pdk/ETRI050_DesignKit}"
@@ -104,4 +105,30 @@ EOF
     verdict="no result"
   fi
   echo "ETRI-LVS ${cell}: ${verdict}   (details: ${out})"
+}
+
+_etri_lyrdb_count() {   # number of markers in a KLayout report database, "?" if unreadable
+  python3 - "$1" 2>/dev/null <<'PY' || echo "?"
+import sys, xml.etree.ElementTree as ET
+items = ET.parse(sys.argv[1]).getroot().find("items")
+print(0 if items is None else len(items))
+PY
+}
+
+etri-check() {
+  local usage="usage: etri-check <cell> [schematic.spice] [subckt]   (Magic DRC, ETRI GDS, KLayout DRC, LVS)"
+  local cell="${1:?$usage}" sch="${2:-}" sub="${3:-$1}" ndrc nkl lvs="-" bad=0
+  ndrc=$(etri-drc "$cell" 2>/dev/null | sed -n 's/^ETRI-DRC [^:]*: \([0-9][0-9]*\) error.*/\1/p')
+  [ "$ndrc" = "0" ] || bad=1
+  etri-gds "$cell" >"${cell}_gds.log" 2>&1
+  rm -f "${cell}_drc.lyrdb"
+  etri-drc-klayout "${cell}.gds" "${cell}_drc.lyrdb" >"${cell}_klayout.log" 2>&1
+  nkl=$(_etri_lyrdb_count "${cell}_drc.lyrdb")
+  [ "$nkl" = "0" ] || bad=1
+  if [ -n "$sch" ]; then
+    lvs=$(etri-lvs "$cell" "$sch" "$sub" 2>/dev/null | sed -n 's/^ETRI-LVS [^:]*: \(.*\)   (details.*/\1/p')
+    [ "$lvs" = "MATCH" ] || bad=1
+  fi
+  echo "ETRI-CHECK ${cell}: Magic DRC ${ndrc:-?} | KLayout DRC ${nkl} | LVS ${lvs:-?}"
+  return "$bad"
 }

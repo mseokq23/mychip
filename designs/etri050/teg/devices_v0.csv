@@ -1,0 +1,15 @@
+# TEG transistor table v0 - draft for building and checking the layout flow.
+# The final W/L list comes from the identifiability analysis (pre-registered before tape-out).
+# W and L in um, multiples of 0.3 um (Magic lambda grid); W >= 1.8, L >= 0.6.
+# 18 um stands in for the PDK's 20 um reference width (20 um is off the 0.3 um grid).
+kind,w_um,l_um,note
+nmos,18,18,long and wide: Vth0 and mobility reference
+nmos,18,3,L series
+nmos,18,1.2,L series
+nmos,18,0.6,minimum L: short channel and Idsat
+nmos,3,18,narrow and long: delta W
+nmos,3,0.6,narrow and short
+pmos,18,18,long and wide: Vth0 and mobility reference
+pmos,18,1.2,L series
+pmos,18,0.6,minimum L: short channel and Idsat
+pmos,3,18,narrow and long: delta W

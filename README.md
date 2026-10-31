@@ -42,6 +42,7 @@ NMOS 하나(W/L = 3/0.6 µm)를 코드로 그려 흐름 전체를 돌린다. 도
 | `etri-gds-read <file.gds>` | KLayout 등에서 만든 ETRI GDS를 Magic 셀(.mag)로 가져오기 |
 | `etri-drc-klayout <file.gds>` | KLayout DRC (킷의 NSPL 규칙 v1.1 덱) |
 | `etri-lvs <cell> <schematic.spice> [subckt]` | Magic 추출 → Netgen LVS |
+| `etri-check <cell> [schematic.spice]` | Magic DRC, GDS 출력, KLayout DRC, LVS를 한 번에 하고 한 줄로 요약 |
 
 ### 예제
 
@@ -50,6 +51,20 @@ NMOS 하나(W/L = 3/0.6 µm)를 코드로 그려 흐름 전체를 돌린다. 도
 - **회로도:** `cd designs/etri050 && xschem-etri sch/nmos_tb.sch` → Netlist → Simulate.
   모델은 코드 블록에 `format="tcleval( @value )"`, `value=".include $::ETRI050_MODEL"`로 넣는다.
 - **패드 프레임:** `.pdk/ETRI050_DesignKit/pads_ETRI/GDS/MPW_PAD_28pin.gds` (1.9 × 1.9 mm, 패드 28개)
+
+### TEG 트랜지스터 생성 (코드로 그리기)
+
+```bash
+python3 designs/etri050/gen/etri050_mos.py                 # 표(devices_v0.csv) 전체 + 배열, 검사까지
+python3 designs/etri050/gen/etri050_mos.py nmos:18:0.6 --check   # 셀 하나 (종류:W:L, µm)
+klayout-etri designs/etri050/teg/build/teg_v0.gds          # noVNC 데스크톱에서 보기
+```
+
+- Python이 λ 격자(0.3 µm) 위에서 좌표를 계산해 Magic 명령을 만들고, Magic이 배치 모드로 그린다. 컨택 컷·임플란트·웰은 Magic의 ETRI 출력 스타일이 만든다.
+- 셀은 4단자 단일 핑거(포트 순서 D G S B)이고, LVS용 회로도 넷리스트(`build/sch/<cell>.spice`)를 함께 만든다.
+- 제약: W ≥ 1.8 µm, L ≥ 0.6 µm, 둘 다 0.3 µm의 배수. Magic 규칙의 최소 poly 폭이 2λ = 0.6 µm라서 공식 최소 L 0.5 µm는 이 흐름으로 그리지 않는다. 20 µm도 격자에 맞지 않아 기준 폭은 18 µm로 둔다.
+- 표의 W/L은 흐름 확인용 초안이다. 최종 목록은 식별가능성 분석으로 정한다.
+- 결과는 `designs/etri050/teg/build/`에 생기고 git에는 올리지 않는다(코드가 원본).
 
 ### 마이칩 제출 조건 (ETRI 소개 자료, 2026-06 기준)
 
@@ -67,6 +82,8 @@ NMOS 하나(W/L = 3/0.6 µm)를 코드로 그려 흐름 전체를 돌린다. 도
 - `etri-lvs`는 추출 결과를 `<cell>.spice`로 저장한다. 회로도 넷리스트는 다른 폴더(예: `netlist/`)에 두고, Xschem에서는 top level을 `.subckt`로 감싼 LVS용 넷리스트를 뽑는다.
 - LVS에서 핀 이름까지 비교하려면 레이아웃의 라벨을 포트로 만든다. Magic 명령창에서 셀 전체를 box로 덮고 `port makeall`을 실행한 뒤 저장한다. 포트가 없으면 `etri-lvs`는 소자와 연결만 비교하고 그 사실을 알려 준다. 결과 줄은 `ETRI-LVS <cell>: MATCH`이고, W/L이 다르면 `MATCH but property errors`로 나온다.
 - 오픈소스 DRC 덱은 공식 Calibre 규칙을 옮긴 것이다. 최종 제출 전 검증 절차는 운영 측 안내를 따른다.
+- KLayout 덱(`etri_05um_generated_final.drc`)에는 poly 엔드캡, 게이트 밖 ACT 길이, ACT 컨택–게이트 간격, NSD/PSD의 ACT 감쌈 같은 규칙이 없다. 그래서 Magic DRC(λ 규칙, 더 보수적)와 함께 돌린다. `etri-check`가 둘 다 한다.
+- ngspice-47(이 이미지)은 `echo` 출력에서 `=` 앞뒤 공백을 지운다. 출력을 파싱할 때 공백이 있다고 가정하지 않는다.
 - 이 이미지의 qflow는 변환 도구 용도라, 킷의 ETRI용 디지털 자동 배치배선 흐름은 이 설정에서 다루지 않는다. 이 설정은 풀커스텀 기준이다.
 
 ## 3. Tiny Tapeout
