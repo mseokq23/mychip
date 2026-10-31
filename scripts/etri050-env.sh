@@ -27,7 +27,7 @@ _etri_netgen() {
 }
 
 magic-etri()   { magic -rcfile "$ETRI050_MAGICRC" "$@"; }
-klayout-etri() { klayout -l "$ETRI050_LYP" "$@"; }
+klayout-etri() { klayout -l "$ETRI050_LYP" -rm "$_etri_ws/scripts/klayout/etri_view.rb" "$@"; }
 xschem-etri()  { xschem --rcfile "$ETRI050_XSCHEMRC" "$@"; }
 
 etri-drc() {
