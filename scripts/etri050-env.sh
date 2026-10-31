@@ -10,6 +10,7 @@
 #   etri-gds-read <file.gds>                  import an ETRI GDS (e.g. from KLayout) into .mag cells
 #   etri-drc-klayout <file.gds> [report]      KLayout DRC with the NSPL rule deck (v1.1)
 #   etri-lvs <cell> <schematic.spice> [sub]   Magic extraction + Netgen LVS
+#   etri-check <cell> [schematic.spice]       all of the above in one line: DRC x2, GDS, LVS
 
 _etri_ws="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export ETRI050_DK="${ETRI050_DK:-$_etri_ws/.pdk/ETRI050_DesignKit}"
@@ -25,8 +26,12 @@ _etri_netgen() {
   if command -v netgen >/dev/null 2>&1; then netgen "$@"; else netgen-lvs "$@"; fi
 }
 
+# The image points KLAYOUT_PATH at the default PDK (IHP SG13G2): its technology and menus
+# do not apply to ETRI layouts, so ETRI sessions use only the user's own KLayout folder.
+_etri_klayout() { KLAYOUT_PATH="${KLAYOUT_HOME:-$HOME/.klayout}" klayout "$@"; }
+
 magic-etri()   { magic -rcfile "$ETRI050_MAGICRC" "$@"; }
-klayout-etri() { klayout -l "$ETRI050_LYP" "$@"; }
+klayout-etri() { _etri_klayout -l "$ETRI050_LYP" -rm "$_etri_ws/scripts/klayout/etri_view.rb" "$@"; }
 xschem-etri()  { xschem --rcfile "$ETRI050_XSCHEMRC" "$@"; }
 
 etri-drc() {
@@ -69,23 +74,65 @@ EOF
 etri-drc-klayout() {
   local gds="${1:?usage: etri-drc-klayout <file.gds> [report.lyrdb]}"
   local rpt="${2:-${gds%.gds}_drc.lyrdb}"
-  klayout -b -r "$ETRI050_DRC_DECK" -rd gdsfile="$gds" -rd resultsfile="$rpt"
+  _etri_klayout -b -r "$ETRI050_DRC_DECK" -rd gdsfile="$gds" -rd resultsfile="$rpt"
   echo "report: $rpt   (view with: klayout-etri $gds -m $rpt)"
 }
 
 etri-lvs() {
   local usage="usage: etri-lvs <cell> <schematic.spice> [schematic_subckt]"
-  local cell="${1:?$usage}" sch="${2:?$usage}" sub="${3:-$1}"
+  local cell="${1:?$usage}" sch="${2:?$usage}" sub="${3:-$1}" lay out="${1}_lvs.out" verdict
   # Extraction writes <cell>.spice next to <cell>.mag: keep the schematic netlist elsewhere.
-  magic -dnull -noconsole -rcfile "$ETRI050_MAGICRC" <<EOF
+  magic -dnull -noconsole -rcfile "$ETRI050_MAGICRC" >"${cell}_ext.log" 2>&1 <<EOF
 load ${cell} -force
 extract all
 ext2spice lvs
-ext2spice subcircuit top off
 ext2spice
 quit -noprompt
 EOF
-  _etri_netgen -batch lvs "${cell}.spice ${cell}" "${sch} ${sub}" "$ETRI050_NETGEN_SETUP" "${cell}_lvs.out" >/dev/null
-  grep -E "Netlists match|Netlists do not match|Circuits match|do not match" "${cell}_lvs.out" | tail -n 2
-  echo "details: ${cell}_lvs.out"
+  # A cell with ports is written as ".subckt <cell> <pins>", and Netgen also compares the pins.
+  # Without ports the netlist is a bare top level: only devices and nets can be compared.
+  if grep -qiE "^\.subckt[[:space:]]+${cell}([[:space:]]|$)" "${cell}.spice"; then
+    lay="${cell}.spice ${cell}"
+  else
+    lay="${cell}.spice"
+    echo "note: ${cell} has no ports, so pin names are not compared (Magic: box over the cell, then 'port makeall')"
+  fi
+  _etri_netgen -batch lvs "$lay" "${sch} ${sub}" "$ETRI050_NETGEN_SETUP" "$out" >/dev/null
+  if grep -qE "do not match|failed pin matching|with port errors" "$out"; then
+    verdict="MISMATCH"
+  elif grep -qE "Circuits match|Netlists match" "$out"; then
+    verdict="MATCH"
+    if grep -qE "Property errors were found|There were property errors" "$out"; then
+      verdict="MATCH but property errors (W, L, ...)"
+    fi
+  else
+    verdict="no result"
+  fi
+  echo "ETRI-LVS ${cell}: ${verdict}   (details: ${out})"
+}
+
+_etri_lyrdb_count() {   # number of markers in a KLayout report database, "?" if unreadable
+  python3 - "$1" 2>/dev/null <<'PY' || echo "?"
+import sys, xml.etree.ElementTree as ET
+items = ET.parse(sys.argv[1]).getroot().find("items")
+print(0 if items is None else len(items))
+PY
+}
+
+etri-check() {
+  local usage="usage: etri-check <cell> [schematic.spice] [subckt]   (Magic DRC, ETRI GDS, KLayout DRC, LVS)"
+  local cell="${1:?$usage}" sch="${2:-}" sub="${3:-$1}" ndrc nkl lvs="-" bad=0
+  ndrc=$(etri-drc "$cell" 2>/dev/null | sed -n 's/^ETRI-DRC [^:]*: \([0-9][0-9]*\) error.*/\1/p')
+  [ "$ndrc" = "0" ] || bad=1
+  etri-gds "$cell" >"${cell}_gds.log" 2>&1
+  rm -f "${cell}_drc.lyrdb"
+  etri-drc-klayout "${cell}.gds" "${cell}_drc.lyrdb" >"${cell}_klayout.log" 2>&1
+  nkl=$(_etri_lyrdb_count "${cell}_drc.lyrdb")
+  [ "$nkl" = "0" ] || bad=1
+  if [ -n "$sch" ]; then
+    lvs=$(etri-lvs "$cell" "$sch" "$sub" 2>/dev/null | sed -n 's/^ETRI-LVS [^:]*: \(.*\)   (details.*/\1/p')
+    [ "$lvs" = "MATCH" ] || bad=1
+  fi
+  echo "ETRI-CHECK ${cell}: Magic DRC ${ndrc:-?} | KLayout DRC ${nkl} | LVS ${lvs:-?}"
+  return "$bad"
 }
