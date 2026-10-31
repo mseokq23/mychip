@@ -26,8 +26,12 @@ _etri_netgen() {
   if command -v netgen >/dev/null 2>&1; then netgen "$@"; else netgen-lvs "$@"; fi
 }
 
+# The image points KLAYOUT_PATH at the default PDK (IHP SG13G2): its technology and menus
+# do not apply to ETRI layouts, so ETRI sessions use only the user's own KLayout folder.
+_etri_klayout() { KLAYOUT_PATH="${KLAYOUT_HOME:-$HOME/.klayout}" klayout "$@"; }
+
 magic-etri()   { magic -rcfile "$ETRI050_MAGICRC" "$@"; }
-klayout-etri() { klayout -l "$ETRI050_LYP" -rm "$_etri_ws/scripts/klayout/etri_view.rb" "$@"; }
+klayout-etri() { _etri_klayout -l "$ETRI050_LYP" -rm "$_etri_ws/scripts/klayout/etri_view.rb" "$@"; }
 xschem-etri()  { xschem --rcfile "$ETRI050_XSCHEMRC" "$@"; }
 
 etri-drc() {
@@ -70,7 +74,7 @@ EOF
 etri-drc-klayout() {
   local gds="${1:?usage: etri-drc-klayout <file.gds> [report.lyrdb]}"
   local rpt="${2:-${gds%.gds}_drc.lyrdb}"
-  klayout -b -r "$ETRI050_DRC_DECK" -rd gdsfile="$gds" -rd resultsfile="$rpt"
+  _etri_klayout -b -r "$ETRI050_DRC_DECK" -rd gdsfile="$gds" -rd resultsfile="$rpt"
   echo "report: $rpt   (view with: klayout-etri $gds -m $rpt)"
 }
 
