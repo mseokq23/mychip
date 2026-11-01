@@ -18,11 +18,14 @@ Floorplan (die um; the core window inside the GPIO cells is 442-1458): control b
 y 460-761 (the array, RO and CBCM come above it and to its right later); scan channel y 442-460
 under it; VSS as a metal1 line along the south and east edges from PVSS (E5) to the control block
 ground bar and PNP2, plus a separate branch from PVSS to PNP1 and the L-split substrate tap; MOS-C on
-the east edge between CHI (E3) and CLO (E4); heater with PNP1 under its middle in the north-east,
-its return on its own line into PVSS; L-split under its source force pad (N4) with the force and gate
-lines on tracks near the north edge and the sense lines below the cell; PNP2 in the far (south-west)
-corner next to PE2 (S1). The unused ro_in inputs of the control block (for the RO bank that comes
-later) are tied to its ground bar.
+the east edge between CHI (E3) and CLO (E4); L-split under its source force pad (N4) with the force
+and gate lines on tracks near the north edge and the sense lines just below the cell. The thermal
+group of the plan (heater + PNP + reference device): PNP1 beside the L-split (37 um between the
+L-split channel and the PNP1 emitter), the heater under both, its long edge 32 um from each, so a
+heater power warms the L-split and PNP1 alike and PNP1 also sees the L-split's own heating; the
+heater return goes on its own line into PVSS. PNP2 in the far (south-west) corner next to PE2 (S1),
+about 1 mm from the heater. The unused ro_in inputs of the control block (for the RO bank that
+comes later) are tied to its ground bar.
 
 Outputs: <out>/pdkv_Top.gds and <out>/pdkv_nets.json (expected nets as probe points, and the block
 placements) for chip_check.py.
@@ -108,9 +111,10 @@ for line in open(PINFILE):
 CTRL = (546.30, 463.52)       # teg_ctrl_F bbox (-9.3,-3.52)-(594.6,297.58) -> die (537.0,460.0)-(1140.9,761.1)
 LSP = (962.90, 1388.00)       # lsplit active lower left: source force (cell x 4.5) under N4
 MOSC = (1219.60, 1005.90)     # mirrored: gate bar (CHI) at the bottom facing E3, CLO bar on top
-PNP1 = (1337.50, 1345.00)     # under the middle of the heater
+PNP1 = (980.00, 1368.00)      # beside the L-split (cell x 959.0-974.6), emitter centre (1004.5, 1392.5)
 PNP2 = (455.00, 458.00)       # far (south-west) corner, next to PE2 (S1)
-HEAT = (1424.00, 1419.60)     # rotated 180: head A (cell left) on the right, toward HT (E7)
+HEAT = (1056.00, 1361.60)     # rotated 180: x 932-1056, y 1340-1361.6 under the L-split and PNP1;
+                              # head A (cell left) on the east end toward HT (E7)
 
 place('pad', 0, 0, name='pdkv_Pad')
 place('ctrl', *CTRL, name='teg_ctrl')
@@ -235,27 +239,29 @@ port_probe('CLO', 'E4:CLO')
 expect('CHI', 'mosc gate bar', 'm1', *mosc_at(100.0, 212.4))
 expect('CLO', 'mosc well/p+ bar', 'm1', *mosc_at(100.0, -6.9))
 
-# ---- heater (north-east): head A -> HT (E7 PAD), head B -> PVSS (E5 upper part) on its own line ----
-rect('m1', 1423.20, 1404.30, 1430.00, 1413.30)             # head A (x 1421.4-1423.2) extended east
-vias(1, 1423.80, 1404.30, 1430.00, 1413.30)                # cuts >= 2 um from the head contacts
-rect('m2', 1423.80, 1404.30, 1452.00, 1413.30)
-rect('m2', 1443.00, 1386.00, 1452.00, 1413.30)
-rect('m2', 1443.00, 1386.00, 1459.40, 1395.00)             # into E7 PAD (y 1348.8-1396.0)
-rect('m1', 1294.60, 1404.30, 1300.80, 1413.30)             # head B (x 1300.8-1302.6) extended west
-vias(1, 1294.60, 1404.30, 1300.60, 1413.30)
-rect('m2', 1291.60, 1114.00, 1300.60, 1413.30)             # its own return line ...
-rect('m2', 1291.60, 1114.00, 1459.40, 1123.00)             # ... into PVSS (y 1037.6-1132.4)
+# ---- heater: head A (east end) -> HT (E7 PAD), head B (west end) -> PVSS (E5 upper part) alone -----
+rect('m1', 1054.20, 1350.00, 1062.00, 1359.00)             # head A (x 1053.4-1055.2) extended east
+vias(1, 1055.80, 1350.00, 1062.00, 1359.00)                # cuts >= 1.8 um from the head contacts
+rect('m2', 1055.80, 1350.00, 1459.40, 1359.00)             # east into E7 PAD (y 1348.8-1396.0)
+rect('m1', 926.00, 1350.00, 933.80, 1359.00)               # head B (x 932.8-934.6) extended west
+vias(1, 926.00, 1350.00, 932.20, 1359.00)
+rect('m2', 922.00, 1150.00, 931.00, 1359.00)               # its own return line: down, kept above
+rect('m2', 922.00, 1150.00, 1425.00, 1159.00)              # the RO area (y < 1142), east, then
+rect('m2', 1416.00, 1114.00, 1425.00, 1159.00)             # into PVSS (y 1037.6-1132.4)
+rect('m2', 1416.00, 1114.00, 1459.40, 1123.00)
 port_probe('HT', 'E7:HT')
 expect('HT', 'heater head A', 'm1', *heat_at(1.70, 10.80))
 expect('VSS', 'heater head B', 'm1', *heat_at(122.30, 10.80))
 
 # ---- PNP1: emitter -> PE1 (E6 PADR); base + collector -> VSS branch from the middle of PVSS -------
-rect('m2', 1359.60, 1367.10, 1408.00, 1369.10)
-rect('m2', 1406.00, 1194.00, 1408.00, 1369.10)
+rect('m2', 1003.50, 1298.00, 1005.50, 1394.90)             # down from the emitter pad, over the heater
+rect('m2', 1003.50, 1298.00, 1408.00, 1300.00)
+rect('m2', 1406.00, 1194.00, 1408.00, 1300.00)
 rect('m2', 1406.00, 1194.00, 1459.40, 1196.00)             # into E6 PADR (y 1181.65-1209.25)
-rect('m2', 1357.00, 1060.00, 1459.40, 1066.00)
-vias(1, 1357.00, 1060.00, 1366.00, 1066.00)
-rect('m1', 1357.00, 1060.00, 1366.00, 1350.50)             # up to the PNP1 collector ring (y 1349.5)
+rect('m2', 1430.00, 1060.00, 1459.40, 1066.00)             # VSS branch: PVSS (middle) ...
+vias(1, 1431.00, 1060.00, 1440.00, 1066.00)
+rect('m1', 1434.00, 1060.00, 1438.00, 1385.00)             # ... up the east side ...
+rect('m1', 1023.00, 1381.00, 1438.00, 1385.00)             # ... to the PNP1 collector ring (east side)
 
 # ---- L-split: force + gate on tracks near the north edge, sense below the cell ---------------------
 X0, Y0 = LSP
@@ -290,7 +296,7 @@ for xs, ty, xp in ((963.80, 1378.00, 790.45), (967.40, 1378.00, 1060.45), (971.6
     rect('m3', min(xs, xp) - 1.00, ty - 0.60, max(xs, xp) + 1.00, ty + 0.60)
     via(2, xp, ty)
     rect('m2', xp - 1.00, ty, xp + 1.00, 1459.00)
-# substrate tap (metal1, y Y0-6.6..-4.8) -> east to the PNP1 collector ring (VSS)
+# substrate tap (metal1, y Y0-6.6..-4.8) -> east to the PNP1 collector ring next to it (VSS)
 rect('m1', X0 + 10.80, Y0 - 6.60, PNP1[0] + 5.50, Y0 - 4.80)
 for net, key in (('LG', 'N1:LG'), ('D1', 'N2:LD1F'), ('D1', 'N3:LD1S'), ('S', 'N4:LSF'), ('S', 'N5:LSS'),
                  ('D2', 'N6:LD2F'), ('D2', 'N7:LD2S')):
