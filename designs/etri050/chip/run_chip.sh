@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Assemble pdkv_Top and check it.
 #   1. inputs, built when missing: pad ring (run_pad_ring.sh), lsplit + mosc (etri050_direct.py),
-#      pnp10 + heater (run_pdk_cells.sh); the control block is the frozen macro in ctrl/macro
+#      pnp10 + heater (run_pdk_cells.sh), Kelvin array (etri050_array.py); the control block is the
+#      frozen macro in ctrl/macro
 #   2. assemble.py -> build/pdkv_Top.gds + build/pdkv_nets.json, with the chip boundary (layer 0) and
 #      the seal ring of rule document 4.21 unless PDKV_SEAL=0
 #   3. the kit's conversion of the official rule deck (KLayout) on the whole chip
@@ -9,6 +10,7 @@
 #      deck uses 0.5) and the seal ring against the 4.21 figure, markers also found in the pad ring
 #      alone counted apart
 #   5. chip_check.py: metal connectivity (opens, shorts, floating metal) and the 0.01 um grid
+#   6. scripts/antenna_rules.py: the rule document's antenna rules (3.PL1/8.MET1/10.MET2/12.MET3.ANT)
 # Usage: [PDKV_SEAL=0] bash run_chip.sh [--rebuild]   (--rebuild remakes the inputs too)
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,6 +21,7 @@ KIT="${ETRI050_DK:-}"
 export KLAYOUT_PATH="${KLAYOUT_HOME:-$HOME/.klayout}"
 B="$HERE/build"
 D="$REPO/designs/etri050/direct/build"
+A="$REPO/designs/etri050/array/build"
 mkdir -p "$B"
 REBUILD=0; [ "${1:-}" = "--rebuild" ] && REBUILD=1
 
@@ -28,6 +31,10 @@ if [ $REBUILD = 1 ] || [ ! -f "$D/lsplit.gds" ] || [ ! -f "$D/mosc.gds" ]; then
 fi
 if [ $REBUILD = 1 ] || [ ! -f "$D/pnp10.gds" ] || [ ! -f "$D/heater.gds" ]; then
   bash "$REPO/designs/etri050/direct/run_pdk_cells.sh" > /dev/null || exit 1
+fi
+if [ $REBUILD = 1 ] || [ ! -f "$A/karray.gds" ] || [ ! -f "$A/karray_pins.json" ]; then
+  mkdir -p "$A"
+  python3 "$REPO/designs/etri050/gen/etri050_array.py" > "$A/array.log" 2>&1 || { cat "$A/array.log"; exit 1; }
 fi
 
 t0=$(date +%s)
@@ -39,6 +46,8 @@ python3 "$REPO/scripts/lyrdb_summary.py" "$B/pdkv_Top_klayout.lyrdb" 2 > "$B/pdk
 klayout -b -r "$REPO/scripts/metal_rules.py" -rd gds="$B/pdkv_Top.gds" -rd baseline="$B/pdkv_Pad.gds" \
   > "$B/pdkv_Top_metal_rules.txt" 2>&1
 klayout -b -r "$HERE/chip_check.py" -rd nets="$B/pdkv_nets.json" > "$B/chip_check.log" 2>&1
+klayout -b -r "$REPO/scripts/antenna_rules.py" -rd gds="$B/pdkv_Top.gds" -rd nets="$B/pdkv_nets.json" \
+  > "$B/pdkv_Top_antenna.txt" 2>&1
 {
   echo "pdkv chip $(date '+%Y-%m-%d %H:%M'), kit $(git -C "$KIT" log -1 --format=%h 2>/dev/null || echo unknown), $(( $(date +%s) - t0 )) s"
   grep -E '^wrote' "$B/assemble.log"
@@ -48,4 +57,6 @@ klayout -b -r "$HERE/chip_check.py" -rd nets="$B/pdkv_nets.json" > "$B/chip_chec
   cat "$B/pdkv_Top_metal_rules.txt"
   echo "-- chip check (metal connectivity, grid)"
   grep -E 'grid|OPEN|SHORT|FLOATING|not found|chip check' "$B/chip_check.log"
+  echo "-- antenna, rule document v1.1 (ratio per gate type, no diode credit; 'diffusion': the net reaches a junction)"
+  cat "$B/pdkv_Top_antenna.txt"
 } | tee "$B/chip_summary.txt"
