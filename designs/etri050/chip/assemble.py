@@ -27,11 +27,16 @@ heater return goes on its own line into PVSS. PNP2 in the far (south-west) corne
 about 1 mm from the heater. The unused ro_in inputs of the control block (for the RO bank that
 comes later) are tied to its ground bar.
 
+Chip boundary and seal ring (-rd seal=0 leaves both out): the MyChip MPW standard chip is 1.9 x 1.9
+mm and the kit centres the pad ring on it (generate_chip.sh puts it at 97.5 um), so CHIPBOUNDARY
+(rule document 2.1, layer 0) is the box 0-1900 um. The seal ring is a block of its own, pdkv_SEAL,
+written to <out>/pdkv_seal.gds and drawn in the outer 30 um as the 4.21 figure gives it (SEAL_RING).
+
 Outputs: <out>/pdkv_Top.gds and <out>/pdkv_nets.json (expected nets as probe points, and the block
 placements) for chip_check.py.
 
 usage: klayout -b -r designs/etri050/chip/assemble.py -rd repo=<repo root> [-rd out=<dir>]
-       [-rd pad=<pdkv_Pad.gds>] [-rd direct=<dir with lsplit, mosc, pnp10, heater .gds>]
+       [-rd pad=<pdkv_Pad.gds>] [-rd direct=<dir with lsplit, mosc, pnp10, heater .gds>] [-rd seal=0]
 """
 import json
 import os
@@ -47,7 +52,9 @@ SRC = {
     'mosc': os.path.join(DIRECT, 'mosc.gds'),
     'pnp10': os.path.join(DIRECT, 'pnp10.gds'),
     'heater': os.path.join(DIRECT, 'heater.gds'),
+    'seal': os.path.join(OUT, 'pdkv_seal.gds'),
 }
+SEAL = str(globals().get('seal', '1')) != '0'
 PINFILE = os.path.join(REPO, 'designs/etri050/ctrl/macro/teg_ctrl_pins.txt')
 PADFILE = os.path.join(os.path.dirname(SRC['pad']), 'pad_pins.json')
 
@@ -73,6 +80,41 @@ def snap(v):
 
 def snap_down(v):
     return int(round(v * 1000)) // 10 * 10 / 1000.0
+
+
+# ---- chip boundary and seal ring -----------------------------------------------------------------
+DIE = 1900.0                  # MyChip MPW standard chip 1.9 x 1.9 mm; pad ring at 97.5-1802.5
+RING = 30.0                   # rule document 4.21: seal ring 30 um, at the chip boundary (scribe side)
+# Rule document 4.21 figure, read with each layer's digitized-area tone from table 2.1 (MET and ACT
+# drawn dark, CONT, VIA and PSD drawn clear): drawn intervals across the ring, um from its inner (die)
+# edge. The kit deck's 21.SEAL checks take the first number of each row as a line width instead.
+SEAL_RING = {
+    11: [(0.0, 30.0)],                                 # ACT: no LOCOS across the ring
+    15: [(0.0, 30.0)],                                 # PSD: P+ (PWELL below; no NSD, POLY, NWELL)
+    31: [(4.1, 4.9), (9.1, 9.9), (14.1, 14.9)],        # CONT 4.1 | 0.8 | 4.2 | 0.8 | 4.2 | 0.8 | 15.1
+    32: [(0.0, 18.0)],                                 # MET1, then 12 um without metal to the scribe lane
+    33: [(6.5, 7.5), (11.5, 12.5)],                    # VIA1 6.5 | 1.0 | 4.0 | 1.0 | 17.5
+    34: [(0.0, 18.0)],                                 # MET2 18 | 12
+    35: [(4.0, 5.0), (9.0, 10.0), (14.0, 15.0)],       # VIA2 4.0 | 1.0 | 4.0 | 1.0 | 4.0 | 1.0 | 15.0
+    36: [(0.0, 18.0)],                                 # MET3 18 | 12
+}
+
+
+def write_seal(path):
+    """pdkv_SEAL: every band as four abutting boxes (square corners, no polygons with holes)."""
+    sl = pya.Layout()
+    sl.dbu = 0.001
+    cell = sl.create_cell('pdkv_SEAL')
+    for n, bands in SEAL_RING.items():
+        shapes = cell.shapes(sl.layer(n, 0))
+        for a, b in bands:
+            o, i = nm(RING - b), nm(RING - a)              # distances from the chip edge
+            d = nm(DIE)
+            for box in (pya.Box(o, o, d - o, i), pya.Box(o, d - i, d - o, d - o),
+                        pya.Box(o, i, i, d - i), pya.Box(d - i, i, d - o, d - i)):
+                shapes.insert(box)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    sl.write(path)
 
 
 # ---- blocks --------------------------------------------------------------------------------------
@@ -117,6 +159,10 @@ HEAT = (1056.00, 1361.60)     # rotated 180: x 932-1056, y 1340-1361.6 under the
                               # head A (cell left) on the east end toward HT (E7)
 
 place('pad', 0, 0, name='pdkv_Pad')
+if SEAL:
+    write_seal(SRC['seal'])
+    place('seal', 0, 0, name='pdkv_SEAL')
+    top.shapes(ly.layer(0, 0)).insert(pya.Box(0, 0, nm(DIE), nm(DIE)))     # CHIPBOUNDARY
 place('ctrl', *CTRL, name='teg_ctrl')
 place('lsplit', *LSP)
 mosc_at = place('mosc', *MOSC, mirror=True)
@@ -305,6 +351,11 @@ for net, cx in (('D1', 0.90), ('S', 4.50), ('D2', 8.70)):
     expect(net, f'lsplit {net} contact strip', 'm1', X0 + cx, Y0 + 5.00)
 expect('LG', 'lsplit gate metal', 'm1', X0 - 2.10, Y0 + 14.00)
 expect('VSS', 'lsplit substrate tap', 'm1', X0 + 4.50, Y0 - 5.70)
+
+# ---- seal ring: its three metals are one piece through its via lines and join no other net --------
+if SEAL:
+    for layer in ('m1', 'm2', 'm3'):
+        expect('SEAL', f'seal ring {layer}, west side', layer, 15.00, DIE / 2)
 
 os.makedirs(OUT, exist_ok=True)
 gds = os.path.join(OUT, 'pdkv_Top.gds')
