@@ -2,7 +2,7 @@
 # Assemble pdkv_Top and check it.
 #   1. inputs, built when missing: pad ring (run_pad_ring.sh), lsplit + mosc (etri050_direct.py),
 #      pnp10 + heater (run_pdk_cells.sh), Kelvin array (etri050_array.py), CBCM block (etri050_cbcm.py),
-#      RO bank (etri050_ro.py);
+#      RO bank and resistor RO (etri050_ro.py);
 #      the control block is the frozen macro in ctrl/macro
 #   2. assemble.py -> build/pdkv_Top.gds + build/pdkv_nets.json, with the chip boundary (layer 0) and
 #      the seal ring of rule document 4.21 unless PDKV_SEAL=0
@@ -43,7 +43,8 @@ if [ $REBUILD = 1 ] || [ ! -f "$C/cbcm_full.gds" ] || [ ! -f "$C/cbcm_pins.json"
   mkdir -p "$C"
   python3 "$REPO/designs/etri050/gen/etri050_cbcm.py" > "$C/cbcm.log" 2>&1 || { cat "$C/cbcm.log"; exit 1; }
 fi
-if [ $REBUILD = 1 ] || [ ! -f "$R/robank_flat.gds" ] || [ ! -f "$R/robank_pins.json" ]; then
+if [ $REBUILD = 1 ] || [ ! -f "$R/robank_flat.gds" ] || [ ! -f "$R/robank_pins.json" ] \
+   || [ ! -f "$R/rores_full.gds" ] || [ ! -f "$R/rores_pins.json" ]; then
   mkdir -p "$R"
   python3 "$REPO/designs/etri050/gen/etri050_ro.py" > "$R/robank.log" 2>&1 || { cat "$R/robank.log"; exit 1; }
 fi
@@ -67,7 +68,7 @@ klayout -b -r "$REPO/scripts/antenna_rules.py" -rd gds="$B/pdkv_Top.gds" -rd net
   echo "-- rules 7-12 and seal ring 4.21, rule document values (baseline: pad ring alone)"
   cat "$B/pdkv_Top_metal_rules.txt"
   echo "-- chip check (metal connectivity, grid)"
-  grep -E 'grid|OPEN|SHORT|FLOATING|not found|chip check' "$B/chip_check.log"
+  grep -E 'grid|OPEN|SHORT|FLOATING|not found|star|chip check' "$B/chip_check.log"
   echo "-- antenna, rule document v1.1 (ratio per gate type, no diode credit; 'diffusion': the net reaches a junction)"
   cat "$B/pdkv_Top_antenna.txt"
 } | tee "$B/chip_summary.txt"

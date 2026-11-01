@@ -10,6 +10,8 @@ ring keeps its own die coordinates, 97.5-1802.5 um):
   karray        designs/etri050/array/build/karray.gds        (etri050_array.py, Magic style ETRI)
   cbcm          designs/etri050/cbcm/build/cbcm_full.gds      (etri050_cbcm.py: Magic, flattened, + PIP)
   robank        designs/etri050/ro/build/robank_flat.gds      (etri050_ro.py: Magic, flattened)
+  rores         designs/etri050/ro/build/rores_full.gds       (etri050_ro.py: Magic, flattened, + poly2
+                                                               resistors)
 
 The routes drawn here follow the rule document v1.1, not only the kit deck: VIA1/VIA2 exactly
 0.8 x 0.8 um and 0.8 um apart with 0.6 um of metal around, no via1 on a contact and no via2 on a
@@ -19,7 +21,8 @@ lines are 9 um wide, just under the 10 um wide-metal class. Every coordinate is 
 
 Floorplan (die um; the core window inside the GPIO cells is 442-1458): control block at x 537-1141,
 y 460-761 (the array above it, the CBCM block at x 1144-1440, y 454-781 to its right, the RO bank at
-x 856-1210, y 823-1146 above it right of the array's row bus); scan channel y 442-460
+x 856-1210, y 823-1146 above it right of the array's row bus, the resistor RO at x 932-1262,
+y 1162-1291 above the heater's return line); scan channel y 442-460
 under it; VSS as a metal1 line along the south and east edges from PVSS (E5) to the control block
 ground bar and PNP2, plus a separate branch from PVSS to PNP1 and the L-split substrate tap; MOS-C on
 the east edge between CHI (E3) and CLO (E4); L-split under its source force pad (N4) with the force
@@ -28,7 +31,7 @@ group of the plan (heater + PNP + reference device): PNP1 beside the L-split (37
 L-split channel and the PNP1 emitter), the heater under both, its long edge 32 um from each, so a
 heater power warms the L-split and PNP1 alike and PNP1 also sees the L-split's own heating; the
 heater return goes on its own line into PVSS. PNP2 in the far (south-west) corner next to PE2 (S1),
-about 1 mm from the heater. The ro_in inputs of the ROs not built (FO4, resistor) are tied to the
+about 1 mm from the heater. The ro_in input of the RO not built (FO4, index 3) is tied to the
 control block's ground bar.
 
 Chip boundary and seal ring (-rd seal=0 leaves both out): the MyChip MPW standard chip is 1.9 x 1.9
@@ -42,6 +45,7 @@ placements) for chip_check.py.
 usage: klayout -b -r designs/etri050/chip/assemble.py -rd repo=<repo root> [-rd out=<dir>]
        [-rd pad=<pdkv_Pad.gds>] [-rd direct=<dir with lsplit, mosc, pnp10, heater .gds>] [-rd seal=0]
        [-rd array=<karray.gds>] [-rd cbcm=<cbcm_full.gds>] [-rd robank=<robank_flat.gds>]
+       [-rd rores=<rores_full.gds>]
 """
 import json
 import os
@@ -63,10 +67,12 @@ SRC = {
     'karray': globals().get('array') or os.path.join(REPO, 'designs/etri050/array/build/karray.gds'),
     'cbcm': globals().get('cbcm') or os.path.join(REPO, 'designs/etri050/cbcm/build/cbcm_full.gds'),
     'robank': globals().get('robank') or os.path.join(REPO, 'designs/etri050/ro/build/robank_flat.gds'),
+    'rores': globals().get('rores') or os.path.join(REPO, 'designs/etri050/ro/build/rores_full.gds'),
 }
 ARRPINS = os.path.join(os.path.dirname(SRC['karray']), 'karray_pins.json')
 CBPINS = os.path.join(os.path.dirname(SRC['cbcm']), 'cbcm_pins.json')
 ROPINS = os.path.join(os.path.dirname(SRC['robank']), 'robank_pins.json')
+RRPINS = os.path.join(os.path.dirname(SRC['rores']), 'rores_pins.json')
 SEAL = str(globals().get('seal', '1')) != '0'
 PINFILE = os.path.join(REPO, 'designs/etri050/ctrl/macro/teg_ctrl_pins.txt')
 PADFILE = os.path.join(os.path.dirname(SRC['pad']), 'pad_pins.json')
@@ -244,11 +250,13 @@ rect('m1', 1131.60, 450.00, 1140.60, 465.00)              # up into the control 
 port_probe('VSS', 'E5:PVSS')
 expect('VSS', 'ctrl gnd bar', 'm1', 1136.10, 600.00)
 
-# ---- control block: ro_in inputs of the ROs not built (FO4 3, resistor 5) tied to the gnd bar --------
+# ---- control block: ro_in input of the RO not built (FO4, 3) tied to the gnd bar ----------------------
 # The gnd bar runs on up into the RO bank's bottom gnd rail (y 824.8-827.2); see the RO bank below.
+# ro_in[5] (the resistor RO's output, below) runs up on metal2 at x 1118.8-1119.8 across the tie line
+# (metal1 y 765-767) with no via there.
 rect('m1', 1131.60, 753.50, 1140.60, 827.20)
 rect('m1', 1105.30, 765.00, 1140.60, 767.00)
-for i in (3, 5):
+for i in (3,):
     x1, y1, x2, y2 = pin_die(f'ro_in[{i}]')
     rect('m2', x1, y2 - 0.50, x2, 767.00)
     via(1, snap_down((x1 + x2) / 2), 766.00)
@@ -654,14 +662,80 @@ expect('VDD', 'robank VDD strap', 'm1', (vx1 + vx2) / 2, RB[1] + 30.00)
 expect('VSS', 'robank bottom gnd rail', 'm1', RB[0] + 100.00, RB[1])
 expect('VSS', 'robank top gnd rail', 'm1', RB[0] + 100.00, RB[1] + 216.00)
 
+# ---- resistor RO (block rores, etri050_ro.py; rores_full.gds = Magic's flattened copy + the resistors) ---
+# Block origin at die (932.0, 1166.0): the free strip above the heater's return line (metal2 y 1150-1159,
+# its rise x 922-931), under PE1 (metal2 y 1298), x 932-1405. en5 / in5 leave the block's east channel at
+# its bottom edge (in5 west of en5), cross the return line in metal3, jog west at y 1096 / 1100 over the
+# free area above MOS-C, run down the gap between the RO bank (metal3 to x 1208.9) and MOS-C (no metal3;
+# its N-well from x 1214.8) and join the corridor over the control block on two more tracks (in5 822,
+# en5 818: the net with the eastern riser takes the lower track, so the two L's nest without crossing).
+# Power from the RO bank's west straps: VDD (metal1 x 857.2-863.8, up from y 1007.2) on up and east on a
+# metal1 line under the return line's rise; VSS (metal2 x 866.2-869.2, up from y 1043.2) on up, then
+# metal3 east over the rise onto the block's VSS strap.
+RR = (932.00, 1166.00)
+place('rores', *RR, name='rores')
+rrj = json.load(open(RRPINS))
+if [round(v, 2) for v in rrj['origin_die']] != list(RR):
+    raise RuntimeError(f"rores_pins.json was drawn for origin {rrj['origin_die']}, not {RR}")
+
+
+def rrpin(name):
+    x0, y0, x1, y1 = rrj['pins'][name]['box']
+    return round(RR[0] + x0, 3), round(RR[1] + y0, 3), round(RR[0] + x1, 3), round(RR[1] + y1, 3)
+
+
+RES_ROUTE = {'in5': dict(jog=1100.00, rise=1210.60, track=822.00),
+             'en5': dict(jog=1096.00, rise=1212.85, track=818.00)}
+for net, rt in RES_ROUTE.items():
+    pin = f"ro_{net[:2]}[5]"
+    px1, py1, px2, py2 = pin_die(pin)
+    pcx = round((px1 + px2) / 2, 2)
+    bx1, by1, bx2, by2 = rrpin(net)
+    bcx = round((bx1 + bx2) / 2, 2)
+    via(2, bcx, by1 + 1.00)                                # onto the channel line's bottom end
+    rect('m3', bcx - 0.60, rt['jog'] - 0.60, bcx + 0.60, by1 + 1.00)
+    rect('m3', rt['rise'] - 0.60, rt['jog'] - 0.60, bcx + 0.60, rt['jog'] + 0.60)
+    rect('m3', rt['rise'] - 0.60, rt['track'] - 0.60, rt['rise'] + 0.60, rt['jog'] + 0.60)
+    rect('m3', pcx - 1.00, rt['track'] - 0.60, rt['rise'] + 0.60, rt['track'] + 0.60)
+    via(2, pcx, rt['track'])
+    rect('m2', pcx - 0.60, py2 - 0.50, pcx + 0.60, rt['track'])     # down into the control block pin
+    expect('RO_' + net.upper(), f'ctrl {pin}', 'm2', pcx, py2 - 0.30)
+    expect('RO_' + net.upper(), f'rores {net}', 'm2', bcx, by1 + 0.30)
+    expect('RO_' + net.upper(), f'gap riser {net}', 'm3', rt['rise'], 950.00)
+rvx1, rvy1, rvx2, rvy2 = rrpin('VDD')
+bvx1, _, bvx2, _ = rpin('VDD')                             # the RO bank's west VDD strap
+rect('m1', bvx1, RB[1] + 181.00, bvx2, 1164.80)            # RO bank VDD strap (top y 1007.2) on up
+rect('m1', bvx1, 1158.20, rvx2, 1164.80)                   # east under the return line's rise
+expect('VDD', 'rores VDD strap', 'm1', (rvx1 + rvx2) / 2, (rvy1 + rvy2) / 2)
+rsx1, rsy1, rsx2, rsy2 = rrpin('VSS')
+rect('m2', RB[0] + 10.20, RB[1] + 217.00, RB[0] + 13.20, 1172.00)  # RO bank VSS strap (top y 1043.2) on up
+vias(2, RB[0] + 10.20, 1168.00, RB[0] + 13.20, 1172.00)
+rect('m3', RB[0] + 10.20, 1168.00, rsx2, 1172.00)
+vias(2, rsx1, 1168.00, rsx2, 1172.00)
+expect('VSS', 'rores gnd rail', 'm1', RR[0] + 100.00, RR[1] + 36.00)
+expect('VSS', 'rores VSS strap', 'm2', (rsx1 + rsx2) / 2, (rsy1 + rsy2) / 2)
+
 # ---- seal ring: its three metals are one piece through its via lines and join no other net --------
 if SEAL:
     for layer in ('m1', 'm2', 'm3'):
         expect('SEAL', f'seal ring {layer}, west side', layer, 15.00, DIE / 2)
 
+# ---- VSS star: three branches that meet only in the PVSS pad (E5) -----------------------------------
+# The heater's return current and the PNP1 / L-split ground stay off the core's metal: the heater has its
+# own return line into PVSS (upper part), PNP1 and the L-split substrate tap a branch from its middle,
+# everything else (control block, PNP2, array, CBCM, RO bank, resistor RO) the line from its lower part.
+# chip_check.py extracts the chip again without the pad ring: each branch must be one net and the three
+# nets must differ.
+VSS_BRANCH = {'heater head B': 'heater return', 'PE1 base ring': 'PNP1, L-split',
+              'PE1 collector ring': 'PNP1, L-split', 'lsplit substrate tap': 'PNP1, L-split'}
+for p in nets['VSS']:
+    if p['at'] != 'pad E5:PVSS':
+        p['branch'] = VSS_BRANCH.get(p['at'], 'core')
+star = [{'net': 'VSS', 'joint': 'pdkv_Pad'}]
+
 os.makedirs(OUT, exist_ok=True)
 gds = os.path.join(OUT, 'pdkv_Top.gds')
 ly.write(gds)
 with open(os.path.join(OUT, 'pdkv_nets.json'), 'w') as f:
-    json.dump({'top': gds, 'blocks': placed, 'nets': nets}, f, indent=1)
+    json.dump({'top': gds, 'blocks': placed, 'nets': nets, 'star': star}, f, indent=1)
 print(f'wrote {gds}: bbox {top.dbbox()} um, {len(placed)} blocks, {len(nets)} nets to check')
