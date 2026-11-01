@@ -1,0 +1,29 @@
+pad,pin,cell,port,function,range
+W1,PVDD,PVDD,VDD,링·코어 전원,5 V (4.5–5.5 V)
+W2,ANW,PANA,PADR,PMOS 행 N-well · 비선택 PMOS 게이트 주차,0–5 V · 누설만
+W3,ADF,PANA,PAD,어레이 드레인 force,0–5 V · ≤ 5 mA
+W4,ADS,PANA,PADR,어레이 드레인 sense,0 A
+W5,ASF,PANA,PAD,어레이 소스 force,0–5 V · ≤ 5 mA
+W6,ASS,PANA,PADR,어레이 소스 sense,0 A
+W7,AG,PANA,PADR,어레이 게이트,0–5 V
+N1,LG,PANA,PADR,L-split 게이트,0–5 V
+N2,LD1F,PANA,PAD,L 0.6 드레인 force,≤ 5 mA
+N3,LD1S,PANA,PADR,L 0.6 드레인 sense,0 A
+N4,LSF,PANA,PAD,L-split 소스 force,0–2 V (V_SB) · ≤ 5 mA
+N5,LSS,PANA,PADR,L-split 소스 sense,0 A
+N6,LD2F,PANA,PAD,L 1.2 드레인 force,≤ 5 mA
+N7,LD2S,PANA,PADR,L 1.2 드레인 sense,0 A
+E1,VCD,PANA,PADR,CBCM DUT 공급,1.5–5 V · µA 평균
+E2,VCR,PANA,PADR,CBCM REF 공급,1.5–5 V · µA 평균
+E3,CHI,PANA,PADR,MOS-C 게이트(LCR HI),0–5 V
+E4,CLO,PANA,PADR,MOS-C N-well(LCR LO),2.5–3 V DC
+E5,PVSS,PVSS,VSS,접지·기판 · 히터 귀환,0 V
+E6,PE1,PANA,PADR,PNP1 이미터(기준 소자 옆),1–9 µA
+E7,HT,PANA,PAD,히터,0–5 V · ≤ 7 mA
+S1,PE2,PANA,PADR,PNP2 이미터(먼 모서리),1–9 µA
+S2,SDI,PIC,Y,스캔 입력,디지털
+S3,SCK,PIC,Y,스캔 클록,≤ 10 MHz
+S4,SLE,PIC,Y,섀도 레지스터 갱신,디지털
+S5,OUT,POB4,A,스캔 읽기 / RO ÷256,디지털
+S6,CCK,PIC,Y,CBCM 클록,0.2–5 MHz
+S7,PVDD,PVDD,VDD,링·코어 전원,5 V
