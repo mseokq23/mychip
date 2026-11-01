@@ -39,11 +39,17 @@ interleaved order S15 S16 S14 ... S1 S30 S0, taps. Over every INVX1 stage s stan
 over field above the gnd rail: a metal2 riser takes the stage's output m5_<s> from its Y pin to a via1
 on the resistor's bottom head; from the top head a via1, a metal2 bar and a metal2 return line in the
 east part of the stage's cell (no pins there) come down to a metal3 track over the row, and a stub goes
-into the next stage's A pin (r5_<s>). The resistor is the plan's "INVX1 + poly2 40 sq" with the
-capacitance after the resistor (the return line, the next gate), as in the plan's simulation. Magic
-draws the heads as a black-box cell p2r40 (ports A bottom, B top, property LEFview: LVS compares it as
-a two-pin subcircuit, so the ring order is checked); KLayout then adds the resistor itself (POLY2,
-CONT, RES, LVSD, MET1 heads; the PDK p2res geometry with L = 80 um) into Magic's flattened GDS.
+into the next stage's A pin (r5_<s>). The stage is the plan's "INVX1 + poly2 40 sq" with the load
+after the resistor, as in the plan's simulation, but heavier: the wiring of r5_<s> (the metal2 return
+line, the next stage's input poly over field, track and stubs) is 19.6-22.4 fF against the plan's 5 fF,
+and the resistor body adds its own capacitance, so the ring runs at about half the plan's frequency
+(sim/blocks/ro_post.py, ro/README.md). Its response to the sheet resistance stays the plan's
+(110 / 140 ohm/sq: +5.9 / -5.3 %, plan +5.8 / -5.2 %).
+Magic draws the heads as a black-box cell p2r40 (ports A bottom, B top, property LEFview: Netgen
+compares it as a two-pin subcircuit, so the ring order is checked); KLayout then adds the resistor
+itself (POLY2, CONT, RES, LVSD, MET1 heads; the PDK p2res geometry with L = 80 um) into Magic's
+flattened GDS, and --check extracts that GDS at device level as well (ro/rores_lvs.py: transistors
+and 30 resistors of 5000 ohm against the circuit above).
 
 usage: python3 designs/etri050/gen/etri050_ro.py [--block robank|rores|all] [--check] [--netlist-only]
        -> designs/etri050/ro/build/robank.mag, robank_flat.gds, sch/robank.spice, robank_pins.json,
@@ -672,7 +678,12 @@ def make_rores(args) -> int:
         ok, line = etri_check(RES_NAME, str(out / "sch" / f"{RES_NAME}.spice"), out)
         print("  " + line + "   (hierarchical Magic DRC counts the kit cells' abutting rails; "
               "its GDS has no resistor layers)")
-        return 0 if (ok or "LVS MATCH" in line) and n == 0 and not bad else 1
+        # Netgen sees each resistor as the black box p2r40; extract the final GDS with the POLY2 resistors too
+        sys.path.insert(0, str(REPO / "designs/etri050/ro"))
+        import rores_lvs
+        dev_ok, dev_line, dev_probs = rores_lvs.lvs(out / f"{RES_NAME}_full.gds")
+        print("  " + dev_line + "".join(f"\n    {p}" for p in dev_probs[:20]))
+        return 0 if (ok or "LVS MATCH" in line) and n == 0 and not bad and dev_ok else 1
     return 1 if bad else 0
 
 

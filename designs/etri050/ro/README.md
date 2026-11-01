@@ -5,8 +5,10 @@
 ```bash
 python3 designs/etri050/gen/etri050_ro.py            # 두 블록: build/robank.mag, robank_flat.gds, sch/robank.spice, robank_pins.json,
                                                      #   rores.mag, p2r40.mag, rores_flat.gds, rores_full.gds(저항 포함), sch/rores.spice, rores_pins.json
-python3 designs/etri050/gen/etri050_ro.py --check    # 평탄화한 Magic DRC, etri-check(LVS); rores는 저항 기하 검사도
+python3 designs/etri050/gen/etri050_ro.py --check    # 평탄화한 Magic DRC, etri-check(LVS); rores는 저항 기하 검사와
+                                                     #   저항까지 넣은 GDS의 소자 수준 LVS(rores_lvs.py)도
 python3 designs/etri050/gen/etri050_ro.py --block rores   # 한 블록만(robank, rores, all)
+python3 designs/etri050/ro/rores_lvs.py              # 소자 수준 LVS만(build/rores_full.gds, 일치하면 0으로 끝남)
 cd designs/etri050/sim/blocks && python3 run_all.py ro_post    # 계획 부하·그린 배선으로 주파수
 ```
 
@@ -48,7 +50,7 @@ robank에 없는 둘: 블록 자리(제어 블록 위, 어레이 행 버스 오�
 |---|---|
 | Magic DRC(평탄화한 사본) | 0(계층 그대로는 킷 셀 레일 맞닿음 7) |
 | LVS(etri-check, Netgen) | MATCH |
-| 공식 규칙 KLayout DRC, `robank_flat.gds` | 0(KLayout 0.28.16, 킷 111dc09 덱. 같은 덱이 일부러 넣은 금속1 0.5 µm 간격을 8.MET1.S1로 잡는 것을 확인) |
+| 공식 규칙 KLayout DRC, `robank_flat.gds` | 0(KLayout 0.28.16, 킷 111dc09 덱. 같은 덱이 일부러 넣은 금속1 0.5 µm 간격을 8.MET1.S1로 잡는 것을 확인). etri-check가 보는 계층 GDS(`robank.gds`)로는 7.CONT.S1 300개: 맞닿은 셀 레일의 탭 접촉이 셀마다 따로 만들어져 0.3 µm 간격으로 놓인 자리라, 칩에는 평탄화한 사본을 쓴다 |
 | 규칙 7–12, 문서 값(`scripts/metal_rules.py`) | 0 |
 | 안테나(블록 단독) | 넘는 넷 0. 가장 큰 비 poly 14, 금속1 182(배선 RO 사행선, 확산 있음), 금속2 70, 금속3 44 |
 
@@ -88,9 +90,10 @@ TT 27 °C, 5 V, MHz. "블록"은 그린 블록의 넷리스트에 계획서 모�
 
 - 회로는 계획서 모의(`sim/blocks/ro_bank.py`의 res)와 같다: 0단 NAND2X1(A = r5_30, B = en5, 출력 r5_0), 1–30단 INVX1이 m5_s를 내고 저항 R5_s가 그것을 다음 단 입력 r5_s로 잇는다. 탭 INVX1 → INVX4가 r5_0에서 in5를 낸다.
 - 저항은 킷 PDK 셀 `p2res`(`analog_ETRI/GDS/NSPL_0p5um.gds`, W 2 × L 100 µm)의 층과 치수를 L만 80 µm로 바꾼 것이다: POLY2 2.0 × 82.4 µm, LVSD(두 접촉 사이, L) 2.0 × 80.0 µm → 40 sq, 끝마다 0.6 µm 접촉 하나를 LVSD 경계에 붙이고(규칙 14.PL2PR.S2 = 0) POLY2 끝에서 0.6 µm·옆에서 0.7 µm 안쪽(14.PL2PR.E2 ≥ 0.5), 금속1 머리 1.8 µm, RES는 POLY2 밖 0.8 µm. 폭 2 µm에 접촉 하나는 규칙 문서 4.14 (c)의 Pcell 표와 같다. 히터와 같은 층 구성이다(`../direct/pdk_cells.py`).
-- 한 줄을 뒤집어 놓고(vdd 레일 y 0, gnd 레일 y 120λ) INV RO처럼 S15 S16 S14 … S1 S30 S0, 탭 순으로 엇갈린다. 저항은 단마다 그 셀 위(셀 x + 15λ)에, gnd 레일 위 4λ에서 시작해 N-well 밖 필드 위에 선다. 단 출력 핀에서 금속2가 곧게 올라와 아래 머리에 비아1(m5_s), 위 머리에서 비아1·금속2 막대·금속2 귀환선이 그 셀의 동쪽 부분(x + 22–26λ, INVX1 핀은 x + 18.5λ까지)으로 내려와 줄 위 금속3 트랙(94·104·114λ)에서 다음 단 A 핀 꽂이로 간다(r5_s). 귀환선이 저항 뒤 마디에 붙으므로 배선 용량이 계획서 모의처럼 저항 뒤에 있다.
+- 주입: 규칙 문서 표 2.4(소자 층 표)는 "Poly2 Res." 열에 NSD를 1로 적었지만, 4.14의 14.PL2PR.bad4(RES 안 NSD·PSD 금지), 킷 KLayout·Calibre 덱(같은 이름의 규칙), PDK `p2res` 셀은 모두 주입이 없다. Calibre 덱 이력에는 2023-11-15에 N형 poly 저항 규칙(14.PL2NR.*)을 모두 지웠다고 적혀 있다. 셀과 덱을 따라 주입 없이 그렸고(공식 덱 0), 표 2.4와 다른 점은 ETRI에 물을 거리로 남긴다.
+- 한 줄을 뒤집어 놓고(vdd 레일 y 0, gnd 레일 y 120λ) INV RO처럼 S15 S16 S14 … S1 S30 S0, 탭 순으로 엇갈린다. 저항은 단마다 그 셀 위(셀 x + 15λ)에, gnd 레일 위 4λ에서 시작해 N-well 밖 필드 위에 선다. 단 출력 핀에서 금속2가 곧게 올라와 아래 머리에 비아1(m5_s), 위 머리에서 비아1·금속2 막대·금속2 귀환선이 그 셀의 동쪽 부분(x + 22–26λ, INVX1 핀은 x + 18.5λ까지)으로 내려와 줄 위 금속3 트랙(94·104·114λ)에서 다음 단 A 핀 꽂이로 간다(r5_s). 귀환선이 저항 뒤 마디에 붙으므로 배선 용량이 계획서 모의처럼 저항 뒤에 있다(값은 계획서보다 크다, 아래 모의).
 - 트랙 간격은 10λ다: 귀환선의 비아2와 다음 셀 A 꽂이의 비아2가 x로 9.5λ라, 9λ 간격 트랙에 서로 다른 넷으로 놓이면 비아 패드가 대각선으로 3.5λ보다 가깝다(첫 판에서 생성기의 간격 검사가 30곳을 잡음). 같은 넷인 S15 → S16(이웃 셀)은 비아2 두 개 대신 금속2 꺾임 하나로 잇는다: 두 비아 패드 사이 2.5λ 틈을 채운 첫 판은 GDS에서 비아 패드가 0.05 µm 작아져 0.05 µm 띠가 남아 공식 덱이 12.MET3.W로 잡았다.
-- Magic은 저항의 두 머리를 블랙박스 셀 `p2r40`(금속1 패드, 포트 A 아래·B 위, LEFview 속성)으로 그린다. LVS(Netgen)는 이것을 두 핀 부분 회로로 비교하므로 고리의 순서까지 맞춰 본다(작은 넷리스트로 확인: 두 저항의 끝을 바꾸거나 한 저항을 뒤집으면 불일치). KLayout이 평탄화한 GDS에 저항 층(POLY2, CONT, LVSD, RES, 금속1 머리)을 넣어 `rores_full.gds`를 만든다. Magic 기술 파일의 rpoly2는 ETRI GDS 양식에서 표시 층 없이 POLY2로만 나가고 그 표시 층(pseudo_rpoly2)까지 POLY2로 써서 저항 폭이 바뀌므로 쓰지 않았다.
+- Magic은 저항의 두 머리를 블랙박스 셀 `p2r40`(금속1 패드, 포트 A 아래·B 위, LEFview 속성)으로 그린다. LVS(Netgen)는 이것을 두 핀 부분 회로로 비교하므로 고리의 순서까지 맞춰 본다(작은 넷리스트로 확인: 두 저항의 끝을 바꾸거나 한 저항을 뒤집으면 불일치). KLayout이 평탄화한 GDS에 저항 층(POLY2, CONT, LVSD, RES, 금속1 머리)을 넣어 `rores_full.gds`를 만든다. Netgen은 이 저항 층을 보지 못하므로 `--check`는 `rores_full.gds`를 KLayout으로 소자 수준까지 다시 뽑아 비교한다(`rores_lvs.py`, 아래 검사 결과). Magic 기술 파일의 rpoly2는 ETRI GDS 양식에서 표시 층 없이 POLY2로만 나가고 그 표시 층(pseudo_rpoly2)까지 POLY2로 써서 저항 폭이 바뀌므로 쓰지 않았다.
 - 크기 328.95 × 129.3 µm(그린 λ 좌표), 칩에서 원점이 다이 (932.0, 1166.0)이고 GDS 범위는 다이 x 933.2–1262.1, y 1161.8–1291.15.
 
 ### 검사 결과
@@ -99,6 +102,7 @@ TT 27 °C, 5 V, MHz. "블록"은 그린 블록의 넷리스트에 계획서 모�
 |---|---|
 | Magic DRC(평탄화한 사본) | 0(계층 그대로는 킷 셀 레일 맞닿음 2) |
 | LVS(etri-check, Netgen) | MATCH(저항은 블랙박스 `p2r40`) |
+| 소자 수준 LVS(`rores_lvs.py`, KLayout, `rores_full.gds`) | MATCH: NMOS 35, PMOS 35, 저항 30개(몸체 POLY2∧LVSD∧RES = Calibre 덱의 PPRES, 125 Ω/sq × 80/2 → 각 5000 Ω, 머리는 몸체 밖 POLY2가 CONT로 금속1에)가 생성기의 회로(킷 표준 셀 트랜지스터 넷리스트 + R 5000 Ω)와 같다. 검사기 확인: 기준에서 저항 하나를 4 kΩ으로, 두 저항의 끝을 맞바꾸기, 탭을 1단 출력으로 옮기기, 레이아웃에서 저항 하나의 RES 지우기, 위 머리 접촉 지우기, 금속1로 두 머리 잇기, LVSD를 60 µm(30 sq)로 줄이기 7가지가 모두 불일치 |
 | 공식 규칙 KLayout DRC, `rores_full.gds`(저항 포함) | 0 |
 | 규칙 7–12, 문서 값 | 0 |
 | 저항 기하(`check_resistors`, `rores_full.gds`) | 30개 모두 POLY2 2.0 × 82.4 µm 한 덩어리, LVSD 부분 2.0 × 80.0 µm(40 sq), RES가 다 덮음, 접촉은 저항마다 둘이고 각각 제 머리(A·B) 금속1 안. 그 밖의 POLY2·POLY2 위 접촉 없음 |
@@ -114,8 +118,10 @@ TT 27 °C, 5 V, MHz. "블록"은 계획서 모의의 부하(저항 뒤 마디마
 
 - 그린 저항 RO는 계획 값의 절반이다. 저항 뒤 마디의 배선이 19.6–22.4 fF(귀환선 금속2 약 116 µm가 11 fF, 다음 단 입력의 필드 poly 4.5 fF, 트랙·꽂이·머리)로 계획서의 5 fF보다 크고, 몸체 용량이 더해져 RC 몫이 커졌다. 저항 앞 마디(m5_s)는 7.8–8.2 fF다.
 - 몸체 용량: 규칙 문서 5.5 표에 POLY2–필드 값이 없어 POLY1의 "Poly to field"(0.0902 fF/µm², 0.0519 fF/µm)를 썼다(저항 하나 23.6 fF). POLY2는 POLY1보다 높이 놓이므로 상한으로 본다. 85 %로 잡으면 35.4 MHz, 몸체 용량을 빼면 44.4 MHz다.
-- RSH 110 / 140 Ω/sq(규칙 문서 5.2 min / max): 36.2 / 32.4 MHz(+5.9 / −5.3 %). RES/INV 비(그린 배선, TT 대비): SS +4.2 %, FF −4.4 %, SF +0.4 %, FS −0.4 %(계획서 모의 +5.2 / −5.4 / −0.1 / −0.1 %).
+- RSH 110 / 140 Ω/sq(규칙 문서 5.2 min / max): 36.2 / 32.4 MHz(+5.9 / −5.3 %). 계획서 부하(블록 열)로는 72.6 / 65.1 MHz(+5.8 / −5.2 %)라, 그린 배선이 RSH에 대한 감도를 줄이지 않았다. MOS 모서리에는 그린 쪽이 조금 더 민감하다(SS / FF: 그린 −4.0 / +3.5 %, 계획서 부하 −2.6 / +1.7 %). RES/INV 비(그린 배선, TT 대비): SS +4.2 %, FF −4.4 %, SF +0.4 %, FS −0.4 %(계획서 모의 +5.2 / −5.4 / −0.1 / −0.1 %).
+- 칩 측정의 기대값은 그린 배선 값(34.2 MHz, 몸체 용량을 모르는 만큼 34–44 MHz)이고 계획서 값(69.1 MHz)이 아니다. 저항 뒤 배선을 줄이지 않고 그대로 둔 근거: 이 RO가 재려는 RSH에 대한 감도가 계획서와 같고(위), 귀환선은 위 머리를 셀 줄로 되돌리는 선이라 이 배치(셀 한 줄 위에 선 저항)에서는 없앨 수 없다.
 - 측정에서는 같은 POLY2인 히터(W 20 × L 120 µm)로 RSH와 온도계수를 직접 재고, INV RO로 MOS 쪽을 잡는다. 그러면 저항 RO 주파수는 남은 몫, 곧 저항 뒤 용량(문서에 값이 없는 POLY2–필드 용량 포함)과 p2res 모델의 RC 지연을 검증한다.
+- 저항 RO는 히터를 끄고 잰다: 저항(POLY2 위 끝 y 1288.9)이 히터 아래 변(y 1340) 51 µm 아래에 있고, 30개 중 서쪽 12개가 히터와 x(955–1056)로 겹친다. 히터를 켜면 저항(p2res TC1 3.9 × 10⁻⁴ /K)과 셀이 데워져 주파수가 바뀐다.
 
 ### 칩 연결 (`../chip/assemble.py`)
 
