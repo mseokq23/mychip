@@ -7,7 +7,7 @@ extracted on MET1, VIA1, MET2, VIA2 and MET3 only, so a transistor, a diode or a
 its terminals and the result says what the metal alone connects.
 
   1. every probe point of a net lies on one extracted net (opens);
-  2. the metal nets of each block alone (pad ring, control block, L-split, MOS-C, PNPs, heater) are
+  2. the metal nets of each block alone (pad ring, seal ring, control block, L-split, MOS-C, PNPs, heater) are
      extracted too, and one point of each is probed in the chip: a chip net that holds block nets must
      hold exactly the block nets that one intended net was drawn to join (shorts between nets, between
      two nets of one block, or into a net nobody intended);
