@@ -83,7 +83,7 @@ ND<i>와 NR<i>를 `cbcm_full.gds`에서 KLayout 연결로 뽑고(넷 이름은 �
 
 ### 레이아웃 뒤 모의 (`sim/blocks/cbcm_post.py`)
 
-블록 넷리스트(LVS와 같은 회로)에 `cbcm_c.py`의 배선 용량(금속·필드 poly; 접합·게이트 용량은 소자 모델이 가짐)을 더하고, 구조는 그린 기하로 PDK 모델을 쓴다: PIP pipcap_i(COX × 면적 + CAPSW × 둘레), N+ ndiode(면적, 게이트를 향하지 않은 둘레), 게이트 nmos4. 금속 구조는 배선 용량에 들어 있다. TT 27 °C, VDD = VCD = VCR = 5 V, 1 MHz.
+`sim/blocks/run_all.py cbcm_block cbcm_post`로 레이아웃 전·뒤 검사 15개를 계획 값과 비교한다(Codespace ngspice-47과 로컬 ngspice-42 모두 15개 ok, 2026-11-01). 블록 넷리스트(LVS와 같은 회로)에 `cbcm_c.py`의 배선 용량(금속·필드 poly; 접합·게이트 용량은 소자 모델이 가짐)을 더하고, 구조는 그린 기하로 PDK 모델을 쓴다: PIP pipcap_i(COX × 면적 + CAPSW × 둘레), N+ ndiode(면적, 게이트를 향하지 않은 둘레), 게이트 nmos4. 금속 구조는 배선 용량에 들어 있다. TT 27 °C, VDD = VCD = VCR = 5 V, 1 MHz.
 
 | 셀 | 구조 | 모델 fF | 리드 fF | 기대 fF | CBCM 모의 fF | 차이 |
 |---|---|---|---|---|---|---|

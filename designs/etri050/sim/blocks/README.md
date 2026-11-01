@@ -22,7 +22,7 @@ python3 run_all.py tg pnp       # 일부만
 python3 run_all.py post         # 레이아웃 뒤 어레이(designs/etri050/array/build/kelvin_r.json이 있을 때 기본 실행에도 들어감)
 ```
 
-실행 시간(Codespace 4코어, ngspice-47, 2026-11-01): 전체 약 10분 — RO 384 s(과도 해석 38회), CBCM 128 s(23회), scan 58 s(스캔 6회 + 분주 9회), 나머지는 각각 10 s 이내. 이때 결과는 `BLOCK CHECKS: 23 ok, 0 to check`였다(킷 db09a3d, 111dc09와 문서 PDF 두 개만 다름).
+실행 시간(Codespace 4코어, ngspice-47, 2026-11-01): 전체 약 10분 — RO 384 s(과도 해석 38회), CBCM 128 s(23회), scan 58 s(스캔 6회 + 분주 9회), 나머지는 각각 10 s 이내. 이때 결과는 `BLOCK CHECKS: 23 ok, 0 to check`였다(킷 db09a3d, 111dc09와 문서 PDF 두 개만 다름). CBCM 블록 두 단계가 더해져 cbcm_block 228 s(54회), cbcm_post 373 s(97회)가 늘었고, 두 단계의 15개는 모두 ok였다(같은 날, 같은 환경). 로컬 ngspice-42(2코어)에서도 같은 값이 나온다.
 
 끝에 `BLOCK CHECKS: N ok, M to check`가 나온다. CHECK는 계획 값과 허용 범위 밖이라는 뜻이고(ngspice 판이나 모델 파일이 다를 때 등), 원인을 확인할 대상이다.
 
