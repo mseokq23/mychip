@@ -1,4 +1,4 @@
-# teg_ctrl pins: name layer x1 y1 x2 y2 (um, coordinates of GDS cell teg_ctrl_F; flabels of qflow layout/teg_ctrl.mag, 1 unit = 0.075 um)
+# teg_ctrl pins: name layer x1 y1 x2 y2 (um, coordinates of GDS cell teg_ctrl_F before the 0.01 um snap; flabels of qflow layout/teg_ctrl.mag, 1 unit = 0.075 um)
 cbcm_clk metal3 590.400 17.400 591.600 18.600
 cbcm_en[0] metal3 590.400 248.400 591.600 249.600
 cbcm_en[1] metal3 590.400 242.400 591.600 243.600

@@ -129,6 +129,23 @@ if [ -f "${TOP}_F_fill.gds" ]; then
 else
   echo "notch fill not written (see ${TOP}_F_fill.log)" > "${TOP}_F_fill_klayout.txt"
 fi
+# The kit route is drawn in quarter-lambda units (0.075 um), off the 0.01 um design grid of the
+# rule document (ETRI's Calibre deck checks OFFGRID per layer). Snap the filled copy to the grid
+# (scripts/snap_grid.py) and check it again: this is the GDS the chip assembly uses
+# (macro/teg_ctrl.gds.gz, written by freeze_macro.sh).
+rm -f "${TOP}_F_grid.gds" "${TOP}_F_grid_klayout.lyrdb"
+if [ -f "${TOP}_F_fill.gds" ]; then
+  KLAYOUT_PATH="${KLAYOUT_HOME:-$HOME/.klayout}" klayout -b -r "$REPO/scripts/snap_grid.py" \
+    -rd infile="${TOP}_F_fill.gds" -rd outfile="${TOP}_F_grid.gds" > "${TOP}_F_grid.log" 2>&1
+fi
+if [ -f "${TOP}_F_grid.gds" ]; then
+  KLAYOUT_PATH="${KLAYOUT_HOME:-$HOME/.klayout}" klayout -b \
+    -r "$KIT/tech/Klayout_DRC_Script/etri_05um_generated_final.drc" \
+    -rd gdsfile="${TOP}_F_grid.gds" -rd resultsfile="${TOP}_F_grid_klayout.lyrdb" > "${TOP}_F_grid_klayout.log" 2>&1
+  python3 "$REPO/scripts/lyrdb_summary.py" "${TOP}_F_grid_klayout.lyrdb" 0 > "${TOP}_F_grid_klayout.txt" 2>&1
+else
+  echo "grid snap not written (see ${TOP}_F_grid.log)" > "${TOP}_F_grid_klayout.txt"
+fi
 cd ..
 
 {
@@ -144,4 +161,6 @@ cd ..
   echo "-- KLayout DRC, official rules (${TOP}_F.gds)"; grep -E 'markers|^[0-9A-Za-z_.]+: [0-9]+$|distance' "layout/${TOP}_F_klayout.txt"
   echo "-- notch fill (${TOP}_F_fill.gds)"; grep -E 'metal[23]:|wrote|Error|error' "layout/${TOP}_F_fill.log"
   echo "-- KLayout DRC, official rules (${TOP}_F_fill.gds)"; grep -E 'markers|^[0-9A-Za-z_.]+: [0-9]+$|distance|not written' "layout/${TOP}_F_fill_klayout.txt"
+  echo "-- 0.01 um grid (${TOP}_F_grid.gds)"; grep -E 'off-grid coordinates [1-9]|cuts not|wrote|Error|error' "layout/${TOP}_F_grid.log"
+  echo "-- KLayout DRC, official rules (${TOP}_F_grid.gds)"; grep -E 'markers|^[0-9A-Za-z_.]+: [0-9]+$|distance|not written' "layout/${TOP}_F_grid_klayout.txt"
 } | tee flow_summary.txt
