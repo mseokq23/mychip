@@ -48,6 +48,7 @@ twpin_col_selb[5]   nonfixed
 twpin_col_selb[6]   nonfixed
 twpin_col_selb[7]   nonfixed
 restrict side T
+sidespace 0.0 0.6
 
 padgroup RO_Bank permute
 twpin_ro_en[0]      nonfixed
@@ -63,6 +64,7 @@ twpin_ro_in[3]      nonfixed
 twpin_ro_in[4]      nonfixed
 twpin_ro_in[5]      nonfixed
 restrict side T
+sidespace 0.62 0.98
 
 padgroup CBCM_Sel permute
 twpin_cbcm_en[0]    nonfixed
