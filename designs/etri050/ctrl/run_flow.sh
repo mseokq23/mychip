@@ -50,10 +50,16 @@ ln -s "$KIT/digital_ETRI/khu_etri05_stdcells.v"      "$T/etri05_stdcells.v"
 for f in "$T"/*; do [ -e "$f" ] || die "missing kit file for $(basename "$f")"; done
 export QFLOW_TECH_DIR="$T"
 
-# project settings and placement parameters from the kit template; pin sides from this design
+# project settings and placement parameters from the kit template; pin sides from this design.
+# One change to the kit's GrayWolf parameters: the core aspect ratio (height / width; the kit
+# template uses 1.0). The floorplan slot for this block is wide and low (under the array and the
+# RO bank, next to CBCM); 0.37 gives 7 rows of 36 um (core 663 x 252 um, checked 2026-11-01).
+ASPECT="${ASPECT:-0.37}"
 cp "$KIT/scripts/RTL_Project/ETRI050/project_vars.sh"        "$W/project_vars.sh"
 echo 'set route_show = 0   # batch run: no qrouter display window' >> "$W/project_vars.sh"
-cp "$KIT/scripts/RTL_Project/ETRI050/layout/TOP_MODULE.par"  "$W/layout/$TOP.par"
+sed "s/^TWMC\*chip.aspect.ratio.*/TWMC*chip.aspect.ratio : $ASPECT/" \
+    "$KIT/scripts/RTL_Project/ETRI050/layout/TOP_MODULE.par" > "$W/layout/$TOP.par"
+grep -q "chip.aspect.ratio : $ASPECT" "$W/layout/$TOP.par" || die "aspect ratio line not found in the kit .par"
 cp "$HERE/layout/$TOP.cel2"                                  "$W/layout/$TOP.cel2"
 
 cd "$W" || die "cannot enter $W"
