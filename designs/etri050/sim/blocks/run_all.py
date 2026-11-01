@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Run every block check and compare with the values recorded in the chip plan.
 
-usage: python3 run_all.py [tg array kelvin post cbcm cbcm_block cbcm_post ro scan pnp lsplit]   (default: all; post
-only when designs/etri050/array/build/kelvin_r.json exists, made by designs/etri050/array/kelvin_r.py, and cbcm_post
-only when designs/etri050/cbcm/build/cbcm_c.json exists, made by designs/etri050/cbcm/cbcm_c.py)
+usage: python3 run_all.py [tg array kelvin post cbcm cbcm_block cbcm_post ro ro_post scan pnp lsplit]   (default:
+all; post only when designs/etri050/array/build/kelvin_r.json exists (designs/etri050/array/kelvin_r.py),
+cbcm_post when designs/etri050/cbcm/build/cbcm_c.json exists (designs/etri050/cbcm/cbcm_c.py), ro_post when
+designs/etri050/ro/build/robank_flat.gds exists (designs/etri050/gen/etri050_ro.py))
 
 Each line ends with ok or CHECK. CHECK means the result moved outside the tolerance
 (for example a different ngspice version or model file) and needs a look, not that the
@@ -19,6 +20,7 @@ import array_post
 import cbcm
 import cbcm_block
 import cbcm_post
+import ro_post
 import lsplit
 import pnp_thermo
 import ro_bank
@@ -118,6 +120,14 @@ def run_ro():
         expect(f'RO {k} TT 27 C', r[k]['f27'] / 1e6, f, 0.02 * f, 'MHz')
 
 
+def run_ro_post():
+    r = ro_post.main()
+    for k, f in (('inv', 121.8), ('nand', 93.1), ('nor', 66.4), ('wire', 64.6)):
+        expect(f'RO bank {k}, plan loads + tap, TT 27 C', r[k]['block'] / 1e6, f, 0.02 * f, 'MHz')
+    for k, f in (('inv', 99.2), ('nand', 83.2), ('nor', 60.6), ('wire', 55.9)):
+        expect(f'RO bank {k}, drawn wiring, TT 27 C', r[k]['layout'] / 1e6, f, 0.02 * f, 'MHz')
+
+
 def run_scan():
     r = scan_divider.main()
     expect('scan + decoder cases passing', r['scan_ok'], r['scan_n'], 0)
@@ -137,8 +147,9 @@ def run_lsplit():
 
 
 STEPS = dict(tg=run_tg, array=run_array, kelvin=run_kelvin, post=run_post, cbcm=run_cbcm, cbcm_block=run_cbcm_block,
-             cbcm_post=run_cbcm_post, ro=run_ro, scan=run_scan, pnp=run_pnp, lsplit=run_lsplit)
-OPTIONAL = {'post': array_post.KELVIN_R, 'cbcm_post': cbcm_post.CJSON}     # default only when their input exists
+             cbcm_post=run_cbcm_post, ro=run_ro, ro_post=run_ro_post, scan=run_scan, pnp=run_pnp, lsplit=run_lsplit)
+OPTIONAL = {'post': array_post.KELVIN_R, 'cbcm_post': cbcm_post.CJSON,      # default only when their input exists
+            'ro_post': ro_post.GDS}
 
 
 def main():

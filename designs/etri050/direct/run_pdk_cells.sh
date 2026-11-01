@@ -19,5 +19,5 @@ for c in pnp10 heater; do
     -rd gdsfile="$B/$c.gds" -rd resultsfile="$B/${c}_klayout.lyrdb" > "$B/${c}_klayout.log" 2>&1
   python3 "$REPO/scripts/lyrdb_summary.py" "$B/${c}_klayout.lyrdb" 2 > "$B/${c}_klayout.txt" 2>&1
   echo "-- $c: $(head -1 "$B/${c}_klayout.txt" | sed 's/.*: //')"
-  grep -E '^[0-9A-Za-z_.]+: [0-9]+$|distance' "$B/${c}_klayout.txt"
+  grep -E '^[0-9A-Za-z_.]+: [0-9]+$|distance' "$B/${c}_klayout.txt" || true   # no rule lines when clean
 done

@@ -90,7 +90,7 @@ def net_names(l2n, regs, spec):
 def ratios(ly, l2n, regs, rules, names):
     """[(ratio, rule, gate type, net box, diffusion, name)]: per net and rule, the larger per-type ratio."""
     out = []
-    for net in l2n.netlist().top_circuit().each_net():
+    for net in next(l2n.netlist().each_circuit_top_down()).each_net():
         gates = {t: l2n.shapes_of_net(net, regs[k], True) for t, k in (('N', 'ngate'), ('P', 'pgate'))}
         if gates['N'].is_empty() and gates['P'].is_empty():
             continue

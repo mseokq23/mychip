@@ -91,7 +91,11 @@ def band_window(i):
 
 
 class Extract:
-    def __init__(self, gds):
+    def __init__(self, gds, blk=None, critical=None):
+        """blk: the generator's Block that drew gds (default: the CBCM block); critical(net) -> True for
+        the nets that must be one piece of metal (default: the CBCM nodes and clocks)."""
+        self.blk = blk
+        self.critical = critical or (lambda k: k.startswith(("ND", "NR", "PG")) or k in ("NG", "PCK"))
         self.ly = kdb.Layout()
         self.ly.read(str(gds))
         self.top = self.ly.top_cell()
@@ -143,7 +147,7 @@ class Extract:
 
     def name_nets(self):
         """cluster id -> name, by probing the generator's metal rectangles."""
-        blk, _ = gen.build()
+        blk = self.blk or gen.build()[0]
         names, seen = {}, defaultdict(set)
         layer = {"metal1": "m1", "metal2": "m2", "metal3": "m3"}
         for net, lay, x0, y0, x1, y1 in blk.netrects:
@@ -157,7 +161,7 @@ class Extract:
             if names.setdefault(n.cluster_id, net) != net:
                 sys.exit(f"short: {net} and {names[n.cluster_id]} are one net (at {p})")
         opens = {k: v for k, v in seen.items() if len(v) > 1}
-        nodes = [k for k in opens if k.startswith(("ND", "NR", "PG")) or k in ("NG", "PCK")]
+        nodes = [k for k in opens if self.critical(k)]
         if nodes:
             sys.exit(f"open: {nodes} drawn as several nets")
         return names

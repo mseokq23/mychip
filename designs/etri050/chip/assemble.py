@@ -9,6 +9,7 @@ ring keeps its own die coordinates, 97.5-1802.5 um):
   pnp10, heater designs/etri050/direct/build/*.gds            (run_pdk_cells.sh)
   karray        designs/etri050/array/build/karray.gds        (etri050_array.py, Magic style ETRI)
   cbcm          designs/etri050/cbcm/build/cbcm_full.gds      (etri050_cbcm.py: Magic, flattened, + PIP)
+  robank        designs/etri050/ro/build/robank_flat.gds      (etri050_ro.py: Magic, flattened)
 
 The routes drawn here follow the rule document v1.1, not only the kit deck: VIA1/VIA2 exactly
 0.8 x 0.8 um and 0.8 um apart with 0.6 um of metal around, no via1 on a contact and no via2 on a
@@ -17,8 +18,8 @@ pad ports are reached straight on, away from the other port of each PANA). Power
 lines are 9 um wide, just under the 10 um wide-metal class. Every coordinate is on the 0.01 um grid.
 
 Floorplan (die um; the core window inside the GPIO cells is 442-1458): control block at x 537-1141,
-y 460-761 (the array above it, the CBCM block at x 1144-1440, y 454-781 to its right, the RO bank
-later); scan channel y 442-460
+y 460-761 (the array above it, the CBCM block at x 1144-1440, y 454-781 to its right, the RO bank at
+x 856-1210, y 823-1146 above it right of the array's row bus); scan channel y 442-460
 under it; VSS as a metal1 line along the south and east edges from PVSS (E5) to the control block
 ground bar and PNP2, plus a separate branch from PVSS to PNP1 and the L-split substrate tap; MOS-C on
 the east edge between CHI (E3) and CLO (E4); L-split under its source force pad (N4) with the force
@@ -27,8 +28,8 @@ group of the plan (heater + PNP + reference device): PNP1 beside the L-split (37
 L-split channel and the PNP1 emitter), the heater under both, its long edge 32 um from each, so a
 heater power warms the L-split and PNP1 alike and PNP1 also sees the L-split's own heating; the
 heater return goes on its own line into PVSS. PNP2 in the far (south-west) corner next to PE2 (S1),
-about 1 mm from the heater. The unused ro_in inputs of the control block (for the RO bank that
-comes later) are tied to its ground bar.
+about 1 mm from the heater. The ro_in inputs of the ROs not built (FO4, resistor) are tied to the
+control block's ground bar.
 
 Chip boundary and seal ring (-rd seal=0 leaves both out): the MyChip MPW standard chip is 1.9 x 1.9
 mm and the kit centres the pad ring on it (generate_chip.sh puts it at 97.5 um), so CHIPBOUNDARY
@@ -40,7 +41,7 @@ placements) for chip_check.py.
 
 usage: klayout -b -r designs/etri050/chip/assemble.py -rd repo=<repo root> [-rd out=<dir>]
        [-rd pad=<pdkv_Pad.gds>] [-rd direct=<dir with lsplit, mosc, pnp10, heater .gds>] [-rd seal=0]
-       [-rd array=<karray.gds>] [-rd cbcm=<cbcm_full.gds>]
+       [-rd array=<karray.gds>] [-rd cbcm=<cbcm_full.gds>] [-rd robank=<robank_flat.gds>]
 """
 import json
 import os
@@ -61,9 +62,11 @@ SRC = {
     'seal': os.path.join(OUT, 'pdkv_seal.gds'),
     'karray': globals().get('array') or os.path.join(REPO, 'designs/etri050/array/build/karray.gds'),
     'cbcm': globals().get('cbcm') or os.path.join(REPO, 'designs/etri050/cbcm/build/cbcm_full.gds'),
+    'robank': globals().get('robank') or os.path.join(REPO, 'designs/etri050/ro/build/robank_flat.gds'),
 }
 ARRPINS = os.path.join(os.path.dirname(SRC['karray']), 'karray_pins.json')
 CBPINS = os.path.join(os.path.dirname(SRC['cbcm']), 'cbcm_pins.json')
+ROPINS = os.path.join(os.path.dirname(SRC['robank']), 'robank_pins.json')
 SEAL = str(globals().get('seal', '1')) != '0'
 PINFILE = os.path.join(REPO, 'designs/etri050/ctrl/macro/teg_ctrl_pins.txt')
 PADFILE = os.path.join(os.path.dirname(SRC['pad']), 'pad_pins.json')
@@ -241,10 +244,11 @@ rect('m1', 1131.60, 450.00, 1140.60, 465.00)              # up into the control 
 port_probe('VSS', 'E5:PVSS')
 expect('VSS', 'ctrl gnd bar', 'm1', 1136.10, 600.00)
 
-# ---- control block: unused ro_in inputs tied to the gnd bar (top edge, until the RO bank exists) ----
-rect('m1', 1131.60, 753.50, 1140.60, 767.00)              # gnd bar extended above the block
-rect('m1', 1085.00, 765.00, 1140.60, 767.00)
-for i in range(6):
+# ---- control block: ro_in inputs of the ROs not built (FO4 3, resistor 5) tied to the gnd bar --------
+# The gnd bar runs on up into the RO bank's bottom gnd rail (y 824.8-827.2); see the RO bank below.
+rect('m1', 1131.60, 753.50, 1140.60, 827.20)
+rect('m1', 1105.30, 765.00, 1140.60, 767.00)
+for i in (3, 5):
     x1, y1, x2, y2 = pin_die(f'ro_in[{i}]')
     rect('m2', x1, y2 - 0.50, x2, 767.00)
     via(1, snap_down((x1 + x2) / 2), 766.00)
@@ -606,6 +610,49 @@ rx1, ry1, rx2, ry2 = cpin('VCR')
 rect('m2', rx1, ry1 - 0.40, 1459.40, ry2 + 0.40)
 port_probe('VCR', 'E2:VCR')
 expect('VCR', 'cbcm VCR riser', 'm2', (rx1 + rx2) / 2, CB[1] + 150.00)
+
+# ---- RO bank (designs/etri050/gen/etri050_ro.py; robank_flat.gds = Magic's flattened copy) -----------
+# Block origin at die (856.0, 826.0): right of the array's row bus, over the control block, under the
+# heater's return line. ro_en / ro_in leave its east channel (x 1184-1209) at its bottom edge and run west
+# on metal3 tracks in the corridor over the control block (y 786-814; the CBCM ends at y 780.6) to the
+# control block's top-edge pins. VDD: the control block's vdd bar goes on up and east on a 9 um metal1
+# line (y 763-772, under the array channel's metal2 stubs) to the block's VDD strap; VSS: the gnd bar
+# goes on up into the block's bottom gnd rail (above).
+RB = (856.00, 826.00)
+place('robank', *RB, name='robank')
+rbj = json.load(open(ROPINS))
+if [round(v, 2) for v in rbj['origin_die']] != list(RB):
+    raise RuntimeError(f"robank_pins.json was drawn for origin {rbj['origin_die']}, not {RB}")
+
+
+def rpin(name):
+    x0, y0, x1, y1 = rbj['pins'][name]['box']
+    return round(RB[0] + x0, 3), round(RB[1] + y0, 3), round(RB[0] + x1, 3), round(RB[1] + y1, 3)
+
+
+RO_TRACK0, RO_PITCH = 786.00, 4.00
+for k, net in enumerate(['en0', 'en1', 'en2', 'en4', 'in0', 'in1', 'in2', 'in4']):
+    i = int(net[-1])
+    pin = f"ro_{net[:2]}[{i}]"
+    px1, py1, px2, py2 = pin_die(pin)
+    pcx = round((px1 + px2) / 2, 2)
+    bx1, by1, bx2, by2 = rpin(net)
+    bcx = round((bx1 + bx2) / 2, 2)
+    ty = RO_TRACK0 + RO_PITCH * k
+    rect('m2', bx1, ty, bx2, by2)                          # down from the block's channel line
+    via(2, bcx, ty)
+    rect('m3', pcx - 1.00, ty - 0.60, bcx + 1.00, ty + 0.60)
+    via(2, pcx, ty)
+    rect('m2', pcx - 0.60, py2 - 0.50, pcx + 0.60, ty)     # down into the control block pin
+    expect('RO_' + net.upper(), f'ctrl {pin}', 'm2', pcx, py2 - 0.30)
+    expect('RO_' + net.upper(), f'robank {net}', 'm2', bcx, by1 + 0.60)
+vx1, vy1, vx2, vy2 = rpin('VDD')
+rect('m1', 537.00, 754.00, 546.00, 772.00)                 # control block vdd bar extended up
+rect('m1', 537.00, 763.00, vx2, 772.00)
+rect('m1', vx1, 763.00, vx2, vy2)
+expect('VDD', 'robank VDD strap', 'm1', (vx1 + vx2) / 2, RB[1] + 30.00)
+expect('VSS', 'robank bottom gnd rail', 'm1', RB[0] + 100.00, RB[1])
+expect('VSS', 'robank top gnd rail', 'm1', RB[0] + 100.00, RB[1] + 216.00)
 
 # ---- seal ring: its three metals are one piece through its via lines and join no other net --------
 if SEAL:

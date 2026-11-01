@@ -8,7 +8,7 @@ its terminals and the result says what the metal alone connects.
 
   1. every probe point of a net lies on one extracted net (opens);
   2. the metal nets of each block alone (pad ring, seal ring, control block, L-split, MOS-C, PNPs, heater,
-     Kelvin array, CBCM block) are extracted too, and one point of each is probed in the chip: a chip net that holds
+     Kelvin array, CBCM block, RO bank) are extracted too, and one point of each is probed in the chip: a chip net that holds
      block nets must hold exactly the block nets that one intended net was drawn to join, i.e. the block
      nets under that net's probe points (shorts between nets, between two nets of one block, or into a
      block net no probe declares, such as a node inside the array);
@@ -51,7 +51,7 @@ def probe(l2n, regs, layer, x, y):
 
 def inner_points(l2n, regs, dbu):
     """One point inside the metal of every net of a block (the vertex mean of a convex piece)."""
-    circuit = l2n.netlist().top_circuit()
+    circuit = next(l2n.netlist().each_circuit_top_down())
     out = []
     for net in circuit.each_net():
         for name in ('m1', 'm2', 'm3'):
@@ -164,7 +164,7 @@ def main(spec_file):
     bad += shorts
 
     # 3. floating route metal (chip nets without any block net)
-    floating = [n for n in l2n.netlist().top_circuit().each_net() if n.cluster_id not in members]
+    floating = [n for n in next(l2n.netlist().each_circuit_top_down()).each_net() if n.cluster_id not in members]
     flo = 0
     for n in floating:
         area = sum(l2n.shapes_of_net(n, regs[k], True).area() for k in ('m1', 'm2', 'm3'))
