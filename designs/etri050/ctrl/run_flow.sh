@@ -19,8 +19,9 @@ W="$HERE/build/qflow"
 
 die() { echo "[flow] ERROR: $*" >&2; exit 1; }
 [ -f "$KIT/tech/etri050.sh" ] || die "kit not found at $KIT (run scripts/setup-etri050.sh)"
-TOOLS="${ETRI050_TOOLS:-$HOME/.local/etri050-tools}"
-if [ -d "$TOOLS/bin" ]; then PATH="$TOOLS/bin:$PATH"; fi
+# (not named TOOLS: the image exports TOOLS=/foss/tools and its yosys wrapper runs $TOOLS/yosys)
+tooldir="${ETRI050_TOOLS:-$HOME/.local/etri050-tools}"
+if [ -d "$tooldir/bin" ]; then PATH="$tooldir/bin:$PATH"; fi
 for t in qflow yosys graywolf qrouter magic netgen tcsh; do
   command -v "$t" >/dev/null 2>&1 || die "'$t' not found in PATH (install: bash scripts/install-qflow-etri050.sh)"
 done

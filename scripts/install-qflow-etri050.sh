@@ -143,9 +143,6 @@ qflow_build() {
   ./configure --prefix="$P"
   make
   make install
-  for f in "$P/bin/qflow" "$P"/share/qflow/scripts/*; do
-    if head -1 "$f" | grep -q '^#!/bin/tcsh'; then sed -i "1s|^#!/bin/tcsh|#!$P/bin/tcsh|" "$f"; fi
-  done
   # tech/etri050 -> kit files, the same links as Tools/qflow-1.4.100_etri050_build.sh
   t="$P/share/qflow/tech/etri050"
   rm -rf "$t.bak"
@@ -165,6 +162,19 @@ qflow_build() {
   for f in "$t"/*; do [ -e "$f" ] || { echo "missing kit file for $f"; exit 1; }; done
 }
 if [ ! -x "$P/bin/qflow" ]; then step qflow qflow_build; fi
+
+# qflow runs tcsh as /bin/tcsh, which the image does not have: in the first line of its scripts
+# and in the first line it writes into the qflow_exec.sh it generates and then executes
+# (qflow.sh: echo "#\!/bin/tcsh -f" > qflow_exec.sh ... exec qflow_exec.sh). Point all of them
+# at the unpacked tcsh. Safe to repeat.
+tcsh_paths() {
+  local f
+  for f in "$P/bin/qflow" "$P"/share/qflow/scripts/*; do
+    if grep -q '!/bin/tcsh' "$f"; then sed -i "s|!/bin/tcsh|!$P/bin/tcsh|g" "$f"; fi
+  done
+  grep -c "!$P/bin/tcsh" "$P/share/qflow/scripts/qflow.sh"
+}
+if [ -x "$P/bin/qflow" ]; then step tcsh-paths tcsh_paths; fi
 
 say "done: $P/bin"
 say "  tcsh     $("$P/bin/tcsh" --version | head -1)"
