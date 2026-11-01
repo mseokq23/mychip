@@ -36,6 +36,7 @@ python3 run_all.py post         # 레이아웃 뒤 어레이(designs/etri050/arr
 | cbcm_block.py | 그린 CBCM 블록의 회로 넷리스트(`designs/etri050/gen/etri050_cbcm.py`): 비중첩 생성기, 셀마다 PMOS 게이트 NAND2X1, 공통 NMOS 게이트, 10개 셀과 구조 모델(PIP·N+는 PDK 모델, 금속은 규칙 문서 값). 5코너·125 °C·VDD 4.5/5.5 V·0.2/1/5 MHz | 300 fF 셀 +1.49 %, 게이트 +0.2 %, 빈 셀 0.00 fF, 비중첩 ≥ 0.30 ns(FF, 4.5 V), 미선택 셀 영향 0.002 %, PADR +0.24 %p, C–V(1.5–5 V) ≤ 0.51 % |
 | cbcm_post.py | 레이아웃 뒤 CBCM: cbcm_block의 넷리스트에 그린 블록의 배선 용량(`designs/etri050/cbcm/cbcm_c.py`, 규칙 문서 용량표)과 그린 기하의 구조 모델(PIP pipcap_i, N+ ndiode, 게이트 nmos4)을 넣는다. N+ 셀은 ndiode와 nmos4 소스·드레인 접합 값을 함께 낸다 | 빈 셀 0.00 fF, 셀 2 +4.50 fF(+1.47 %, 코너·VDD·클록에 따라 +1.34–1.68 %), 게이트 +0.2 %, 비중첩 ≥ 0.47 ns, PADR +0.25 %p, C–V(셀 6–9, 1.5–5 V) ≤ 0.96 % |
 | ro_bank.py | 31단 RO 6종 × 5코너(27 °C) + TT 125 °C, INV RO의 VDD 4.5–5.5 V | INV 123.1, NAND 93.8, NOR 66.8, FO4 52.8, 배선 65.0, 저항 69.1 MHz(TT 27 °C) |
+| ro_post.py | 그린 RO 뱅크(`designs/etri050/gen/etri050_ro.py`)의 넷리스트: 탭 INVX1 → INVX4 포함. 계획 부하(마디마다 5 fF, 배선 RO 43.5 fF)로 한 번, 그린 GDS의 배선 용량(규칙 문서 용량표, `cbcm_c.py`의 추출기)으로 5코너·125 °C | 계획 부하: INV 121.8, NAND 93.1, NOR 66.4, 배선 64.6 MHz(ro_bank보다 탭만큼 0.4–1.1 % 느림). 그린 배선: 99.2, 83.2, 60.6, 55.9 MHz(마디 배선 13–25 fF, 계획 가정 5 fF) |
 | scan_divider.py | 8비트 스캔 + 섀도 + 3→8 디코더(3 PVT × 1·10 MHz), 분주기 ÷16(100–200 MHz) | 모두 정상 |
 | pnp_thermo.py | pnp10 온도계(PADR 경유) 3전류법 대 2전류법 | 3전류법 오차 ≤ +0.16 K(27–125 °C), 2전류법 −4.9 K(125 °C) |
 | lsplit.py | W 9 µm 포화 전류, Terada–Muta(L 0.6·1.2·3·9 µm) | 4.56 mA, R_sd 121 Ω(27 °C)·135 Ω(125 °C) |
