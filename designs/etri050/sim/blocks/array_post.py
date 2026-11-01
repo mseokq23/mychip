@@ -14,7 +14,10 @@ The measured cell is row 0 of its column with the largest path resistance of tha
 rows (typ or max sheet/via values). Reported as in array_path.py: on-current error against the
 reference for VG >= 1.5 V, threshold difference, and the R_tot error at VG = 5 V, VDS = 0.1 V;
 'corrected' compares with the reference given the typ path resistance, i.e. after subtracting
-the extracted table, when the process sits at the max values.
+the extracted table, when the process sits at the max values. At 125 C the open column (the cell
+without its DUT) is subtracted as in array_path.py; it carries only leakage, so its run forces the
+pads with plain sources (force and sense agree to nV there, and ngspice does not always converge
+on an ideal Kelvin loop around a nearly open load).
 """
 import json
 import math
@@ -41,12 +44,15 @@ def netlist(w, l, vds, corner, temp, out, cell, ref_cell, open_col=False, ncol=8
     rc = 2 * cell['r_d_cont']
     rb = 4 * -cell['r_d_metal'] / (1 - 2 * -cell['r_d_metal'] / rc)
     n = header(corner, temp, ".lib '05cmos_model_260210.lib' DIODE") + PANA + "vdd vdd 0 5\n"
-    if temp > 100:     # the open column's force node only carries nA of leakage: ngspice's DC sweep
-        n = n.replace('gmin=1e-15', 'gmin=1e-13')    # stalls at 1e-15; both runs of a pair use 1e-13
     for p in ('pdf', 'pds', 'psf', 'pss', 'pg'):
         n += f"x{p} {p} vdd 0 pana\n"
-    n += f"vdset dset 0 {vds}\nedf dfo 0 dset pds 1e5\nvmd dfo pdf 0\n"
-    n += "esf sfo 0 0 pss 1e5\nvms sfo psf 0\nvg pg 0 0\n"
+    if open_col:
+        # the open column carries only nA of leakage, so force and sense agree to nV: plain sources at the
+        # force pads (an ideal Kelvin loop around a nearly open load does not always converge in ngspice)
+        n += f"vdf dfo 0 {vds}\nvmd dfo pdf 0\nvsf sfo 0 0\nvms sfo psf 0\nvg pg 0 0\n"
+    else:
+        n += f"vdset dset 0 {vds}\nedf dfo 0 dset pds 1e5\nvmd dfo pdf 0\n"
+        n += "esf sfo 0 0 pss 1e5\nvms sfo psf 0\nvg pg 0 0\n"
     n += "rdf pdf bdf 2\nrds pds bds 10\nrsf psf ass 2\nrss pss ass 10\nrg pg bg 10\n"
     n += tgate('rg', 'bg', 'row0', 'vdd', '0', 6, 15)
     for r in range(1, nrow):

@@ -63,7 +63,7 @@ def run_post():
     expect_max('array after layout: |dVt| at 27 C (max)',
                max(abs(x['dvt']) for k, v in r.items() if k[4] == 27 for x in v.values()), 0.02, 'mV')
     expect_max('array after layout: |dVt| 125 C after open subtraction (max)',
-               max(abs(x['dvt_cor']) for v in r.values() for x in v.values() if 'dvt_cor' in x), 0.08, 'mV')
+               max(abs(x['dvt_cor']) for v in r.values() for x in v.values() if 'dvt_cor' in x), 0.06, 'mV')
 
 
 def run_cbcm():
