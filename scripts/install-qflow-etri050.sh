@@ -92,19 +92,38 @@ graywolf_build() {
           -DCMAKE_EXE_LINKER_FLAGS="-L$SR/usr/lib/$ARCH" \
           -DCMAKE_SHARED_LINKER_FLAGS="-L$SR/usr/lib/$ARCH" ..
   make -j"$J"
-  # the kit script runs the test suite too; a failure is reported at the end, not fatal
-  make test || echo "graywolf: some tests failed"
   make install
 }
 if [ ! -x "$P/bin/graywolf" ]; then step graywolf graywolf_build; fi
 
+# graywolf's own test suite (the kit script runs it too). The test scripts copy each case with
+# "rsync <src> <dir>/ -a --copy-links -v"; the image has no rsync, so a stand-in doing the same
+# copy (cp -RL) is put on PATH for the tests only. The cases compare placements with the
+# expected files byte for byte. A failure is reported at the end, not fatal.
+graywolf_test() {
+  local b="$SRC/graywolf/build"
+  mkdir -p "$b/shim"
+  cat > "$b/shim/rsync" <<'EOF'
+#!/bin/sh
+src=; dst=
+for a in "$@"; do case "$a" in -*) ;; *) if [ -z "$src" ]; then src=$a; else dst=$a; fi ;; esac; done
+exec cp -RL "$src" "$dst"
+EOF
+  chmod +x "$b/shim/rsync"
+  cd "$b"
+  PATH="$b/shim:$PATH" ctest --output-on-failure || echo "graywolf: some tests failed"
+}
+if [ -d "$SRC/graywolf/build" ]; then step graywolf-test graywolf_test; fi
+
 # 3. qrouter (Tcl/Tk headers and stub libraries from the sysroot, shared libraries from the image)
+# Debian's /usr/lib/tk8.6/tkConfig.sh only sources /usr/lib/<arch>/tk8.6/tkConfig.sh by absolute
+# path, which is not in the image, so the multiarch copies in the sysroot are named directly.
 qrouter_build() {
-  local s="$SRC/qrouter" tcl tk
+  local s="$SRC/qrouter" tcl="$SR/usr/lib/$ARCH/tcl8.6" tk="$SR/usr/lib/$ARCH/tk8.6"
   [ -d "$s/.git" ] || git clone -q "$QROUTER_URL" "$s"
   git -C "$s" checkout -q "$QROUTER_REV"
-  tcl="$(dirname "$(find "$SR" -name tclConfig.sh -type f | head -1)")"
-  tk="$(dirname "$(find "$SR" -name tkConfig.sh -type f | head -1)")"
+  [ -f "$tcl/tclConfig.sh" ] || { echo "no tclConfig.sh in $tcl"; exit 1; }
+  [ -f "$tk/tkConfig.sh" ] || { echo "no tkConfig.sh in $tk"; exit 1; }
   cd "$s"
   ./configure --prefix="$P" --with-tcl="$tcl" --with-tk="$tk" \
     --with-tclincls="$SR/usr/include/tcl8.6" --with-tkincls="$SR/usr/include/tcl8.6" \
@@ -149,7 +168,7 @@ if [ ! -x "$P/bin/qflow" ]; then step qflow qflow_build; fi
 
 say "done: $P/bin"
 say "  tcsh     $("$P/bin/tcsh" --version | head -1)"
-say "  graywolf $(git -C "$SRC/graywolf" describe --tags --always) (tests: $(grep -Eo '[0-9]+% tests passed.*' "$LOG/graywolf.log" 2>/dev/null | tail -1))"
+say "  graywolf $(git -C "$SRC/graywolf" describe --tags --always) (tests: $(grep -Eo '[0-9]+% tests passed.*' "$LOG/graywolf-test.log" 2>/dev/null | tail -1))"
 say "  qrouter  $(cat "$SRC/qrouter/VERSION")"
 say "  qflow    $(cat "$SRC/qflow-1.4.100_etri050/VERSION") (kit $(git -C "$KIT" log -1 --format=%h))"
 say "open a new terminal (or: export PATH=\"$P/bin:\$PATH\"), then: cd designs/etri050/ctrl && make flow"
