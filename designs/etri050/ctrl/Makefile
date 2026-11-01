@@ -37,7 +37,8 @@ flow: check-kit
 	bash run_flow.sh
 
 qflowsim: check-kit
-	iverilog -g2005 -Ttyp -o $(B)/tb_qflow.vvp tb/tb_$(TOP).v $(B)/qflow/synthesis/$(TOP).rtlnopwr.v $(CELLV)
+	python3 strip_port_wires.py $(B)/qflow/synthesis/$(TOP).rtlnopwr.v $(B)/$(TOP)_qflow.v
+	iverilog -g2005 -Ttyp -o $(B)/tb_qflow.vvp tb/tb_$(TOP).v $(B)/$(TOP)_qflow.v $(CELLV)
 	vvp -n $(B)/tb_qflow.vvp | tee $(B)/sim_qflow.log
 	@grep -q 'TB RESULT: PASS' $(B)/sim_qflow.log
 
