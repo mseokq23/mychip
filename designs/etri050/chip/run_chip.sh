@@ -68,7 +68,7 @@ klayout -b -r "$REPO/scripts/antenna_rules.py" -rd gds="$B/pdkv_Top.gds" -rd net
   echo "-- rules 7-12 and seal ring 4.21, rule document values (baseline: pad ring alone)"
   cat "$B/pdkv_Top_metal_rules.txt"
   echo "-- chip check (metal connectivity, grid)"
-  grep -E 'grid|OPEN|SHORT|FLOATING|not found|chip check' "$B/chip_check.log"
+  grep -E 'grid|OPEN|SHORT|FLOATING|not found|star|chip check' "$B/chip_check.log"
   echo "-- antenna, rule document v1.1 (ratio per gate type, no diode credit; 'diffusion': the net reaches a junction)"
   cat "$B/pdkv_Top_antenna.txt"
 } | tee "$B/chip_summary.txt"

@@ -8,16 +8,22 @@ its terminals and the result says what the metal alone connects.
 
   1. every probe point of a net lies on one extracted net (opens);
   2. the metal nets of each block alone (pad ring, seal ring, control block, L-split, MOS-C, PNPs, heater,
-     Kelvin array, CBCM block, RO bank) are extracted too, and one point of each is probed in the chip: a chip net that holds
-     block nets must hold exactly the block nets that one intended net was drawn to join, i.e. the block
-     nets under that net's probe points (shorts between nets, between two nets of one block, or into a
-     block net no probe declares, such as a node inside the array);
+     Kelvin array, CBCM block, RO bank, resistor RO) are extracted too, and one point of each is probed in
+     the chip: a chip net that holds block nets must hold exactly the block nets that one intended net
+     was drawn to join, i.e. the block nets under that net's probe points (shorts between nets, between
+     two nets of one block, or into a block net no probe declares, such as a node inside the array);
   3. metal the routing added that touches no block is reported (floating pieces);
   4. every vertex of the chip lies on the 0.01 um design grid (rule document 3.3; ETRI's Calibre
-     deck checks OFFGRID per layer, the kit KLayout deck does not).
+     deck checks OFFGRID per layer, the kit KLayout deck does not);
+  5. star nets (pdkv_nets.json 'star'): the chip is extracted again without the joint block (VSS: the
+     pad ring, whose PVSS pad joins the branches) and the probe points of each branch of the net must be
+     one net, and no two branches one net: the heater's return current and the PNP1 / L-split ground
+     share no metal with the core's ground.
 
-The control block, the L-split and the MOS-C also pass their own LVS (qflow/kit Netgen, etri-check);
-the GPIO cells, pnp10 and the heater are ETRI or PDK layout with pins only, as in the kit's flow.
+The control block, the L-split, the MOS-C, the array, the CBCM block, the RO bank and the resistor RO
+also pass their own LVS (qflow/kit Netgen, etri-check; the resistor RO also at device level with its
+POLY2 resistors, ro/rores_lvs.py); the GPIO cells, pnp10 and the heater are ETRI or PDK layout with
+pins only, as in the kit's flow.
 
 usage: klayout -b -r designs/etri050/chip/chip_check.py -rd nets=<build>/pdkv_nets.json
 """
@@ -175,8 +181,51 @@ def main(spec_file):
                 box += l2n.shapes_of_net(n, regs[k], True)
             print(f"  FLOATING metal: {box.bbox().to_dtype(dbu)}")
     bad += flo
+
+    # 5. star nets: branches that may meet only inside one block (VSS: in the PVSS pad)
+    star_bad = 0
+    for st in spec.get('star', []):
+        jb = next(b for b in spec['blocks'] if b['name'] == st['joint'])
+        jl = pya.Layout()
+        jl.read(jb['gds'])
+        sl = pya.Layout()
+        sl.read(spec['top'])
+        stop = sl.top_cell()
+        gone = [i for i in stop.each_inst() if i.cell.name == jl.top_cell().name]
+        for i in gone:
+            i.delete()
+        sl2n, sregs = extract(sl, stop)
+        branch = {}
+        for p in spec['nets'][st['net']]:
+            if 'branch' in p:
+                branch.setdefault(p['branch'], []).append((p['at'], probe(sl2n, sregs, p['layer'], p['x'], p['y'])))
+        owner, shared = {}, {}
+        for name, pts in branch.items():
+            for _, i in pts:
+                if i is not None and owner.setdefault(i, name) != name:
+                    shared.setdefault(i, {owner[i]}).add(name)
+        apart = not shared
+        for i, names in shared.items():
+            print(f"  star {st['net']}: branches {sorted(names)} share net {i} without {st['joint']}")
+        problems = len(gone) != 1
+        for name, pts in branch.items():
+            ids = {i for _, i in pts}
+            one = len(ids) == 1 and None not in ids
+            problems += not one
+            print(f"  star {st['net']} without {st['joint']}: branch '{name}' {len(pts)} points: "
+                  f"{'one net ' + str(next(iter(ids))) if one else 'NOT ONE NET ' + str(sorted(map(str, ids)))}")
+            if not one:
+                for at, i in pts:
+                    print(f"         {at}: net {i}")
+        problems += not apart
+        print(f"  star {st['net']}: {len(branch)} branches meet only in {st['joint']} -> "
+              f"{'ok' if not problems else 'JOINED OUTSIDE IT' if not apart else 'PROBLEM'}"
+              + (f" ({len(gone)} instances of {st['joint']} removed)" if len(gone) != 1 else ''))
+        star_bad += problems > 0
+    bad += star_bad
     print(f"chip check: {len(spec['nets'])} nets, {sum(len(v) for v in spec['nets'].values())} points, "
-          f"{shorts} shorts, {flo} floating pieces, {sum(grid.values())} off-grid coordinates -> "
+          f"{shorts} shorts, {flo} floating pieces, {sum(grid.values())} off-grid coordinates, "
+          f"{len(spec.get('star', [])) - star_bad} of {len(spec.get('star', []))} star nets apart -> "
           f"{'PASS' if bad == 0 else f'{bad} problem(s)'}")
 
 

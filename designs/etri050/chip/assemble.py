@@ -252,7 +252,8 @@ expect('VSS', 'ctrl gnd bar', 'm1', 1136.10, 600.00)
 
 # ---- control block: ro_in input of the RO not built (FO4, 3) tied to the gnd bar ----------------------
 # The gnd bar runs on up into the RO bank's bottom gnd rail (y 824.8-827.2); see the RO bank below.
-# ro_in[5]'s metal2 crosses this metal1 strip without a via (resistor RO, below).
+# ro_in[5] (the resistor RO's output, below) runs up on metal2 at x 1118.8-1119.8 across the tie line
+# (metal1 y 765-767) with no via there.
 rect('m1', 1131.60, 753.50, 1140.60, 827.20)
 rect('m1', 1105.30, 765.00, 1140.60, 767.00)
 for i in (3,):
@@ -702,8 +703,9 @@ for net, rt in RES_ROUTE.items():
     expect('RO_' + net.upper(), f'rores {net}', 'm2', bcx, by1 + 0.30)
     expect('RO_' + net.upper(), f'gap riser {net}', 'm3', rt['rise'], 950.00)
 rvx1, rvy1, rvx2, rvy2 = rrpin('VDD')
-rect('m1', vx1, RB[1] + 181.00, vx2, 1164.80)              # RO bank VDD strap (top y 1007.2) on up
-rect('m1', vx1, 1158.20, rvx2, 1164.80)                    # east under the return line's rise
+bvx1, _, bvx2, _ = rpin('VDD')                             # the RO bank's west VDD strap
+rect('m1', bvx1, RB[1] + 181.00, bvx2, 1164.80)            # RO bank VDD strap (top y 1007.2) on up
+rect('m1', bvx1, 1158.20, rvx2, 1164.80)                   # east under the return line's rise
 expect('VDD', 'rores VDD strap', 'm1', (rvx1 + rvx2) / 2, (rvy1 + rvy2) / 2)
 rsx1, rsy1, rsx2, rsy2 = rrpin('VSS')
 rect('m2', RB[0] + 10.20, RB[1] + 217.00, RB[0] + 13.20, 1172.00)  # RO bank VSS strap (top y 1043.2) on up
@@ -718,9 +720,22 @@ if SEAL:
     for layer in ('m1', 'm2', 'm3'):
         expect('SEAL', f'seal ring {layer}, west side', layer, 15.00, DIE / 2)
 
+# ---- VSS star: three branches that meet only in the PVSS pad (E5) -----------------------------------
+# The heater's return current and the PNP1 / L-split ground stay off the core's metal: the heater has its
+# own return line into PVSS (upper part), PNP1 and the L-split substrate tap a branch from its middle,
+# everything else (control block, PNP2, array, CBCM, RO bank, resistor RO) the line from its lower part.
+# chip_check.py extracts the chip again without the pad ring: each branch must be one net and the three
+# nets must differ.
+VSS_BRANCH = {'heater head B': 'heater return', 'PE1 base ring': 'PNP1, L-split',
+              'PE1 collector ring': 'PNP1, L-split', 'lsplit substrate tap': 'PNP1, L-split'}
+for p in nets['VSS']:
+    if p['at'] != 'pad E5:PVSS':
+        p['branch'] = VSS_BRANCH.get(p['at'], 'core')
+star = [{'net': 'VSS', 'joint': 'pdkv_Pad'}]
+
 os.makedirs(OUT, exist_ok=True)
 gds = os.path.join(OUT, 'pdkv_Top.gds')
 ly.write(gds)
 with open(os.path.join(OUT, 'pdkv_nets.json'), 'w') as f:
-    json.dump({'top': gds, 'blocks': placed, 'nets': nets}, f, indent=1)
+    json.dump({'top': gds, 'blocks': placed, 'nets': nets, 'star': star}, f, indent=1)
 print(f'wrote {gds}: bbox {top.dbbox()} um, {len(placed)} blocks, {len(nets)} nets to check')
