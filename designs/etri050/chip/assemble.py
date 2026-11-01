@@ -1,0 +1,314 @@
+"""Assemble pdkv_Top: pad ring + control block + direct devices + routing (KLayout batch mode).
+
+Every part is a GDS with ETRI layer numbers, merged as in the kit's generate_chip.sh step 4 (the pad
+ring keeps its own die coordinates, 97.5-1802.5 um):
+
+  pdkv_Pad      designs/etri050/chip/build/pdkv_Pad.gds       (run_pad_ring.sh, Magic style ETRI-G)
+  teg_ctrl_F    designs/etri050/ctrl/macro/teg_ctrl.gds.gz    (qflow block, notch-filled, 0.01 um grid)
+  lsplit, mosc  designs/etri050/direct/build/*.gds            (etri050_direct.py, Magic style ETRI)
+  pnp10, heater designs/etri050/direct/build/*.gds            (run_pdk_cells.sh)
+
+The routes drawn here follow the rule document v1.1, not only the kit deck: VIA1/VIA2 exactly
+0.8 x 0.8 um and 0.8 um apart with 0.6 um of metal around, no via1 on a contact and no via2 on a
+via1, metal1 >= 0.8, metal2 >= 1.0, metal3 >= 1.2 um wide, >= 1.0 um between different shapes (the
+pad ports are reached straight on, away from the other port of each PANA). Power, heater and force
+lines are 9 um wide, just under the 10 um wide-metal class. Every coordinate is on the 0.01 um grid.
+
+Floorplan (die um; the core window inside the GPIO cells is 442-1458): control block at x 537-1141,
+y 460-761 (the array, RO and CBCM come above it and to its right later); scan channel y 442-460
+under it; VSS as a metal1 line along the south and east edges from PVSS (E5) to the control block
+ground bar and PNP2, plus a separate branch from PVSS to PNP1 and the L-split substrate tap; MOS-C on
+the east edge between CHI (E3) and CLO (E4); L-split under its source force pad (N4) with the force
+and gate lines on tracks near the north edge and the sense lines just below the cell. The thermal
+group of the plan (heater + PNP + reference device): PNP1 beside the L-split (37 um between the
+L-split channel and the PNP1 emitter), the heater under both, its long edge 32 um from each, so a
+heater power warms the L-split and PNP1 alike and PNP1 also sees the L-split's own heating; the
+heater return goes on its own line into PVSS. PNP2 in the far (south-west) corner next to PE2 (S1),
+about 1 mm from the heater. The unused ro_in inputs of the control block (for the RO bank that
+comes later) are tied to its ground bar.
+
+Outputs: <out>/pdkv_Top.gds and <out>/pdkv_nets.json (expected nets as probe points, and the block
+placements) for chip_check.py.
+
+usage: klayout -b -r designs/etri050/chip/assemble.py -rd repo=<repo root> [-rd out=<dir>]
+       [-rd pad=<pdkv_Pad.gds>] [-rd direct=<dir with lsplit, mosc, pnp10, heater .gds>]
+"""
+import json
+import os
+import pya
+
+REPO = globals().get('repo') or os.getcwd()
+OUT = globals().get('out') or os.path.join(REPO, 'designs/etri050/chip/build')
+DIRECT = globals().get('direct') or os.path.join(REPO, 'designs/etri050/direct/build')
+SRC = {
+    'pad': globals().get('pad') or os.path.join(REPO, 'designs/etri050/chip/build/pdkv_Pad.gds'),
+    'ctrl': os.path.join(REPO, 'designs/etri050/ctrl/macro/teg_ctrl.gds.gz'),
+    'lsplit': os.path.join(DIRECT, 'lsplit.gds'),
+    'mosc': os.path.join(DIRECT, 'mosc.gds'),
+    'pnp10': os.path.join(DIRECT, 'pnp10.gds'),
+    'heater': os.path.join(DIRECT, 'heater.gds'),
+}
+PINFILE = os.path.join(REPO, 'designs/etri050/ctrl/macro/teg_ctrl_pins.txt')
+PADFILE = os.path.join(os.path.dirname(SRC['pad']), 'pad_pins.json')
+
+ly = pya.Layout()
+ly.dbu = 0.001
+top = ly.create_cell('pdkv_Top')
+LAY = {k: ly.layer(n, 0) for k, n in (('m1', 32), ('v1', 33), ('m2', 34), ('v2', 35), ('m3', 36))}
+
+
+def nm(v):
+    """um -> database units, refusing anything off the 0.01 um design grid."""
+    r = int(round(v * 1000))
+    if r % 10:
+        raise ValueError(f'{v} um is off the 0.01 um grid')
+    return r
+
+
+def snap(v):
+    """Pin coordinates of the macro, rounded as scripts/snap_grid.py rounded its GDS."""
+    r = int(round(v * 1000))
+    return (r + 5 if r % 10 == 5 else r) / 1000.0
+
+
+def snap_down(v):
+    return int(round(v * 1000)) // 10 * 10 / 1000.0
+
+
+# ---- blocks --------------------------------------------------------------------------------------
+cells, placed = {}, []
+
+
+def block(key):
+    if key not in cells:
+        src = pya.Layout()
+        src.read(SRC[key])
+        if len(src.top_cells()) != 1:
+            raise RuntimeError(f'{SRC[key]}: {len(src.top_cells())} top cells')
+        cell = ly.create_cell(src.top_cell().name)
+        cell.copy_tree(src.top_cell())
+        cells[key] = cell
+    return cells[key]
+
+
+def place(key, x, y, rot=0, mirror=False, name=None):
+    t = pya.Trans(rot // 90, mirror, nm(x), nm(y))
+    top.insert(pya.CellInstArray(block(key).cell_index(), t))
+    placed.append({'name': name or key, 'gds': SRC[key], 'x': x, 'y': y, 'rot': rot, 'mirror': mirror})
+    return lambda cx, cy: (lambda p: (p.x / 1000.0, p.y / 1000.0))(t * pya.Point(nm(cx), nm(cy)))
+
+
+pads = {}
+for p in json.load(open(PADFILE))['pads']:
+    pads[p['pad'] + ':' + p['pin']] = p['rect']
+ctrl_pins = {}
+for line in open(PINFILE):
+    if line.startswith('#') or not line.strip():
+        continue
+    name, layer, *c = line.split()
+    ctrl_pins[name] = (layer, *[snap(float(v)) for v in c])
+
+CTRL = (546.30, 463.52)       # teg_ctrl_F bbox (-9.3,-3.52)-(594.6,297.58) -> die (537.0,460.0)-(1140.9,761.1)
+LSP = (962.90, 1388.00)       # lsplit active lower left: source force (cell x 4.5) under N4
+MOSC = (1219.60, 1005.90)     # mirrored: gate bar (CHI) at the bottom facing E3, CLO bar on top
+PNP1 = (980.00, 1368.00)      # beside the L-split (cell x 959.0-974.6), emitter centre (1004.5, 1392.5)
+PNP2 = (455.00, 458.00)       # far (south-west) corner, next to PE2 (S1)
+HEAT = (1056.00, 1361.60)     # rotated 180: x 932-1056, y 1340-1361.6 under the L-split and PNP1;
+                              # head A (cell left) on the east end toward HT (E7)
+
+place('pad', 0, 0, name='pdkv_Pad')
+place('ctrl', *CTRL, name='teg_ctrl')
+place('lsplit', *LSP)
+mosc_at = place('mosc', *MOSC, mirror=True)
+place('pnp10', *PNP1, name='pnp1')
+place('pnp10', *PNP2, name='pnp2')
+heat_at = place('heater', *HEAT, rot=180)
+
+
+def pin_die(name):
+    _, x1, y1, x2, y2 = ctrl_pins[name]
+    return x1 + CTRL[0], y1 + CTRL[1], x2 + CTRL[0], y2 + CTRL[1]
+
+
+# ---- drawing helpers (um) ------------------------------------------------------------------------
+def rect(layer, x1, y1, x2, y2):
+    top.shapes(LAY[layer]).insert(pya.Box(nm(min(x1, x2)), nm(min(y1, y2)), nm(max(x1, x2)), nm(max(y1, y2))))
+
+
+def vias(kind, x1, y1, x2, y2):
+    """Both metals over the rectangle and as many 0.8 um cuts as fit (0.8 um apart, 0.6 um inside)."""
+    cut, lo, hi = ('v1', 'm1', 'm2') if kind == 1 else ('v2', 'm2', 'm3')
+    rect(lo, x1, y1, x2, y2)
+    rect(hi, x1, y1, x2, y2)
+    n = [int(round((b - a) - 2.0, 3) // 1.6) + 1 for a, b in ((x1, x2), (y1, y2))]
+    if min(n) < 1:
+        raise ValueError(f'via{kind} rectangle {x1},{y1},{x2},{y2} is too small')
+    x0 = snap_down((x1 + x2 - (n[0] - 1) * 1.6 - 0.8) / 2)
+    y0 = snap_down((y1 + y2 - (n[1] - 1) * 1.6 - 0.8) / 2)
+    for i in range(n[0]):
+        for j in range(n[1]):
+            cx, cy = round(x0 + i * 1.6, 2), round(y0 + j * 1.6, 2)
+            rect(cut, cx, cy, cx + 0.8, cy + 0.8)
+    return n[0] * n[1]
+
+
+def via(kind, cx, cy):
+    """One cut centred at (cx, cy) with 2.0 um pads on both metals."""
+    return vias(kind, cx - 1.0, cy - 1.0, cx + 1.0, cy + 1.0)
+
+
+nets = {}
+
+
+def expect(net, what, layer, x, y):
+    nets.setdefault(net, []).append({'at': what, 'layer': layer, 'x': round(x, 3), 'y': round(y, 3)})
+
+
+def port_probe(net, key):
+    x1, y1, x2, y2 = pads[key]
+    expect(net, 'pad ' + key, 'm2', (x1 + x2) / 2, (y1 + y2) / 2)
+
+
+# ---- VDD: PVDD (W1) -> control block vdd bar (metal1, x 537.0-546.0) -------------------------------
+rect('m2', 440.60, 535.00, 528.00, 544.00)
+vias(1, 519.00, 535.00, 528.00, 544.00)
+rect('m1', 519.00, 535.00, 540.00, 544.00)
+port_probe('VDD', 'W1:PVDD')
+expect('VDD', 'ctrl vdd bar', 'm1', 541.50, 600.00)
+
+# ---- VSS: PVSS (E5) -> metal1 line along the east and south edges --------------------------------
+rect('m2', 1447.00, 1040.00, 1459.40, 1049.00)            # strap into the PVSS port (lower part)
+vias(1, 1447.00, 1040.00, 1456.00, 1049.00)
+rect('m1', 1447.00, 446.00, 1456.00, 1049.00)             # east edge
+rect('m1', 455.00, 446.00, 1456.00, 455.00)               # south edge, under the scan channel
+rect('m1', 1131.60, 450.00, 1140.60, 465.00)              # up into the control block gnd bar
+port_probe('VSS', 'E5:PVSS')
+expect('VSS', 'ctrl gnd bar', 'm1', 1136.10, 600.00)
+
+# ---- control block: unused ro_in inputs tied to the gnd bar (top edge, until the RO bank exists) ----
+rect('m1', 1131.60, 753.50, 1140.60, 767.00)              # gnd bar extended above the block
+rect('m1', 1085.00, 765.00, 1140.60, 767.00)
+for i in range(6):
+    x1, y1, x2, y2 = pin_die(f'ro_in[{i}]')
+    rect('m2', x1, y2 - 0.50, x2, 767.00)
+    via(1, snap_down((x1 + x2) / 2), 766.00)
+    expect('VSS', f'ctrl ro_in[{i}]', 'm2', (x1 + x2) / 2, y2 - 0.30)
+
+# ---- scan pins: block bottom edge (y 460.0) -> south pads, four metal3 tracks in y 442-460 ---------
+TRACK = {'out': 444.50, 'cck': 444.50, 'sle': 447.50, 'sdi': 450.50, 'sck': 453.50}
+SCAN = {'out': 'S5:OUT', 'cck': 'S6:CCK', 'sle': 'S4:SLE', 'sdi': 'S2:SDI', 'sck': 'S3:SCK'}
+for net, key in SCAN.items():
+    x1, y1, x2, y2 = pin_die(net)
+    ty = TRACK[net]
+    cx = snap_down((x1 + x2) / 2)
+    rect('m2', x1, ty, x2, y1 + 1.00)                      # down from the pin (its bottom is y1 = 460.0)
+    via(2, cx, ty)
+    px1, _, px2, py2 = pads[key]
+    pcx = snap_down((px1 + px2) / 2)
+    rect('m3', min(cx, pcx) - 1.00, ty - 0.60, max(cx, pcx) + 1.00, ty + 0.60)
+    via(2, pcx, ty)
+    rect('m2', pcx - 1.00, py2 - 1.00, pcx + 1.00, ty)     # down into the PIC Y / POB4 A port
+    port_probe(net.upper(), key)
+    expect(net.upper(), f'ctrl {net}', 'm2', (x1 + x2) / 2, y1 + 0.40)
+
+# ---- PNPs: emitter through four via1 between its 3 x 3 contacts, base ring tied to collector ring --
+for (px, py), pe, net in ((PNP1, 'E6:PE1', 'PE1'), (PNP2, 'S1:PE2', 'PE2')):
+    for cx in (23.10, 25.90):
+        for cy in (23.10, 25.90):
+            rect('v1', px + cx - 0.40, py + cy - 0.40, px + cx + 0.40, py + cy + 0.40)
+    rect('m2', px + 22.10, py + 22.10, px + 26.90, py + 26.90)
+    rect('m1', px + 6.00, py + 23.50, px + 13.50, py + 25.50)
+    port_probe(net, pe)
+    expect(net, f'{net} emitter', 'm1', px + 24.50, py + 20.50)
+    expect('VSS', f'{net} base ring', 'm1', px + 14.00, py + 30.00)
+    expect('VSS', f'{net} collector ring', 'm1', px + 5.50, py + 40.00)
+rect('m1', 475.00, 450.00, 484.00, 463.50)                 # PNP2 collector ring <- south VSS line
+rect('m2', 477.10, 480.10, 521.45, 482.10)                 # PE2: east over the rings, then down to S1
+rect('m2', 519.45, 441.00, 521.45, 482.10)
+
+# ---- MOS-C: CHI (bottom bar after mirroring) -> E3 PADR, CLO (top bar) -> E4 PADR -------------------
+rect('m1', 1372.00, 783.00, 1381.00, 794.40)               # gate bar (x 1270.45-1382.35) extended down
+vias(1, 1372.00, 783.00, 1381.00, 791.00)
+rect('m2', 1372.00, 783.00, 1459.40, 791.00)               # under the cell edge (y 792.6) to E3
+rect('m1', 1435.20, 1011.90, 1445.00, 1019.70)             # CLO bar (x 1216.6-1436.2) extended past the cell
+vias(1, 1437.00, 1011.90, 1445.00, 1019.70)
+rect('m2', 1437.00, 921.45, 1445.00, 1019.70)
+rect('m2', 1437.00, 921.45, 1459.40, 929.45)
+port_probe('CHI', 'E3:CHI')
+port_probe('CLO', 'E4:CLO')
+expect('CHI', 'mosc gate bar', 'm1', *mosc_at(100.0, 212.4))
+expect('CLO', 'mosc well/p+ bar', 'm1', *mosc_at(100.0, -6.9))
+
+# ---- heater: head A (east end) -> HT (E7 PAD), head B (west end) -> PVSS (E5 upper part) alone -----
+rect('m1', 1054.20, 1350.00, 1062.00, 1359.00)             # head A (x 1053.4-1055.2) extended east
+vias(1, 1055.80, 1350.00, 1062.00, 1359.00)                # cuts >= 1.8 um from the head contacts
+rect('m2', 1055.80, 1350.00, 1459.40, 1359.00)             # east into E7 PAD (y 1348.8-1396.0)
+rect('m1', 926.00, 1350.00, 933.80, 1359.00)               # head B (x 932.8-934.6) extended west
+vias(1, 926.00, 1350.00, 932.20, 1359.00)
+rect('m2', 922.00, 1150.00, 931.00, 1359.00)               # its own return line: down, kept above
+rect('m2', 922.00, 1150.00, 1425.00, 1159.00)              # the RO area (y < 1142), east, then
+rect('m2', 1416.00, 1114.00, 1425.00, 1159.00)             # into PVSS (y 1037.6-1132.4)
+rect('m2', 1416.00, 1114.00, 1459.40, 1123.00)
+port_probe('HT', 'E7:HT')
+expect('HT', 'heater head A', 'm1', *heat_at(1.70, 10.80))
+expect('VSS', 'heater head B', 'm1', *heat_at(122.30, 10.80))
+
+# ---- PNP1: emitter -> PE1 (E6 PADR); base + collector -> VSS branch from the middle of PVSS -------
+rect('m2', 1003.50, 1298.00, 1005.50, 1394.90)             # down from the emitter pad, over the heater
+rect('m2', 1003.50, 1298.00, 1408.00, 1300.00)
+rect('m2', 1406.00, 1194.00, 1408.00, 1300.00)
+rect('m2', 1406.00, 1194.00, 1459.40, 1196.00)             # into E6 PADR (y 1181.65-1209.25)
+rect('m2', 1430.00, 1060.00, 1459.40, 1066.00)             # VSS branch: PVSS (middle) ...
+vias(1, 1431.00, 1060.00, 1440.00, 1066.00)
+rect('m1', 1434.00, 1060.00, 1438.00, 1385.00)             # ... up the east side ...
+rect('m1', 1023.00, 1381.00, 1438.00, 1385.00)             # ... to the PNP1 collector ring (east side)
+
+# ---- L-split: force + gate on tracks near the north edge, sense below the cell ---------------------
+X0, Y0 = LSP
+# gate: metal1 bar (x 959.9-961.7) -> west at the poly-contact level -> metal2 up -> metal3 west -> N1
+rect('m1', 944.00, Y0 + 9.30, 961.70, Y0 + 11.30)
+via(1, 945.00, Y0 + 10.30)
+rect('m2', 944.40, Y0 + 10.30, 945.60, 1440.00)
+via(2, 945.00, 1440.00)
+rect('m3', 519.45, 1439.20, 946.00, 1440.80)
+via(2, 520.45, 1440.00)
+rect('m2', 519.45, 1440.00, 521.45, 1459.00)
+# drain 1 force: stub (x 963.2-964.4) -> jog west -> 9 um metal2 up -> 9 um metal3 west -> N2 PAD
+rect('m2', 947.00, Y0 + 17.40, 964.40, Y0 + 20.00)
+rect('m2', 947.00, Y0 + 17.40, 956.00, 1429.00)
+vias(2, 947.00, 1420.00, 956.00, 1429.00)
+rect('m3', 692.90, 1420.00, 956.00, 1429.00)
+vias(2, 692.90, 1420.00, 701.90, 1429.00)
+rect('m2', 692.90, 1420.00, 701.90, 1459.00)
+# source force: stub (x 966.8-968.0) -> straight up, 9 um once clear of the jog -> N4 PAD
+rect('m2', 966.80, Y0 + 17.00, 968.00, Y0 + 21.20)
+rect('m2', 959.00, Y0 + 21.20, 968.00, 1459.00)
+# drain 2 force: stub (x 971.0-972.2) -> 9 um metal2 up -> 9 um metal3 east -> N6 PAD
+rect('m2', 971.00, Y0 + 17.40, 980.00, 1429.00)
+vias(2, 971.00, 1420.00, 980.00, 1429.00)
+rect('m3', 971.00, 1420.00, 1241.90, 1429.00)
+vias(2, 1232.90, 1420.00, 1241.90, 1429.00)
+rect('m2', 1232.90, 1420.00, 1241.90, 1459.00)
+# sense: stubs end at y Y0-9; D1 west and S east on one metal3 level, D2 east one level lower
+for xs, ty, xp in ((963.80, 1378.00, 790.45), (967.40, 1378.00, 1060.45), (971.60, 1374.00, 1330.45)):
+    rect('m2', xs - 0.60, ty, xs + 0.60, Y0 - 8.40)       # stub extended down to the via
+    via(2, xs, ty)
+    rect('m3', min(xs, xp) - 1.00, ty - 0.60, max(xs, xp) + 1.00, ty + 0.60)
+    via(2, xp, ty)
+    rect('m2', xp - 1.00, ty, xp + 1.00, 1459.00)
+# substrate tap (metal1, y Y0-6.6..-4.8) -> east to the PNP1 collector ring next to it (VSS)
+rect('m1', X0 + 10.80, Y0 - 6.60, PNP1[0] + 5.50, Y0 - 4.80)
+for net, key in (('LG', 'N1:LG'), ('D1', 'N2:LD1F'), ('D1', 'N3:LD1S'), ('S', 'N4:LSF'), ('S', 'N5:LSS'),
+                 ('D2', 'N6:LD2F'), ('D2', 'N7:LD2S')):
+    port_probe(net, key)
+for net, cx in (('D1', 0.90), ('S', 4.50), ('D2', 8.70)):
+    expect(net, f'lsplit {net} contact strip', 'm1', X0 + cx, Y0 + 5.00)
+expect('LG', 'lsplit gate metal', 'm1', X0 - 2.10, Y0 + 14.00)
+expect('VSS', 'lsplit substrate tap', 'm1', X0 + 4.50, Y0 - 5.70)
+
+os.makedirs(OUT, exist_ok=True)
+gds = os.path.join(OUT, 'pdkv_Top.gds')
+ly.write(gds)
+with open(os.path.join(OUT, 'pdkv_nets.json'), 'w') as f:
+    json.dump({'top': gds, 'blocks': placed, 'nets': nets}, f, indent=1)
+print(f'wrote {gds}: bbox {top.dbbox()} um, {len(placed)} blocks, {len(nets)} nets to check')

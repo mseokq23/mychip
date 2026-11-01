@@ -7,7 +7,9 @@ teg_ctrl/teg_ctrl.v     RTL
 tb/tb_teg_ctrl.v        자체 판정 테스트벤치 (RTL과 게이트 수준 넷리스트에 같은 것을 씀)
 cell_area.py            게이트 넷리스트의 셀 수와 LEF 면적 합
 layout/teg_ctrl.cel2    qflow 핀 배치 힌트 (변별 핀 묶음, 위 변 구간)
-run_flow.sh             qflow 배치·배선 + 킷 DRC·LVS·스택 비아 검사 + 평탄화 DRC·공식 규칙 KLayout DRC(같은 넷 홈을 메운 사본 포함)
+run_flow.sh             qflow 배치·배선 + 킷 DRC·LVS·스택 비아 검사 + 평탄화 DRC·공식 규칙 KLayout DRC(같은 넷 홈을 메운 사본, 0.01 µm 격자에 맞춘 사본 포함)
+freeze_macro.sh         격자에 맞춘 GDS와 핀 목록을 칩 조립용 매크로(macro/)로 고정
+macro/                  teg_ctrl.gds.gz(칩 조립이 읽는 블록 GDS), teg_ctrl_pins.txt(핀 사각형)
 strip_port_wires.py     qflow 넷리스트의 중복 포트 선언을 빼서 Icarus로 시뮬레이션하게 함
 Makefile                sim / synth / gatesim / flow / qflowsim
 ```
@@ -48,7 +50,7 @@ make flow      # = bash run_flow.sh → build/qflow/flow_summary.txt
 make qflowsim  # qflow가 합성한 넷리스트(배치·배선에 들어간 것)에 같은 테스트벤치
 ```
 
-- 킷 `scripts/RTL_Project/ETRI050/Makefile`과 같은 순서: `qflow synthesize → place → sta → route → migrate → lvs`, 이어서 킷 `run_drc.sh`, `run_lvs.sh`, `check_via_stack.py`. 그 뒤 세 가지를 더 본다: 킷 `mag2gds.sh`로 평탄화한 `teg_ctrl_F`의 Magic DRC, 그 ETRI GDS에 킷의 공식 규칙 변환 덱(KLayout) 검사(`scripts/lyrdb_summary.py`로 규칙별 개수·간격 요약), 금속2·3 도형 안의 좁은 홈을 메운 사본(`scripts/fill_notches.py` → `teg_ctrl_F_fill.gds`)에 같은 덱 검사.
+- 킷 `scripts/RTL_Project/ETRI050/Makefile`과 같은 순서: `qflow synthesize → place → sta → route → migrate → lvs`, 이어서 킷 `run_drc.sh`, `run_lvs.sh`, `check_via_stack.py`. 그 뒤 세 가지를 더 본다: 킷 `mag2gds.sh`로 평탄화한 `teg_ctrl_F`의 Magic DRC, 그 ETRI GDS에 킷의 공식 규칙 변환 덱(KLayout) 검사(`scripts/lyrdb_summary.py`로 규칙별 개수·간격 요약), 금속2·3 도형 안의 좁은 홈을 메운 사본(`scripts/fill_notches.py` → `teg_ctrl_F_fill.gds`)에 같은 덱 검사, 그 사본을 0.01 µm 설계 격자에 맞춘 것(`scripts/snap_grid.py` → `teg_ctrl_F_grid.gds`)에 같은 덱 검사.
 - qflow 기술 디렉터리는 `build/qflow/tech/etri050`에 만든다. 킷 파일을 `tech/etri050.sh`가 기대하는 이름으로 연결한다(예: `khu_etri05_stdcells.lib` → `etri05_stdcells.lib`). 킷의 `project_vars.sh`와 GrayWolf 템플릿(`TOP_MODULE.par`)을 쓰되, 템플릿에서 코어 높이/폭 비(`TWMC*chip.aspect.ratio`, 템플릿 1.0)만 0.49로 바꾼다(배치도 칸에 맞추기, 아래 결과). `ASPECT=0.37 make flow`처럼 바꿔 돌릴 수 있다.
 - 필요한 도구: qflow, yosys, graywolf, qrouter, magic, netgen, tcsh, klayout, python3. 하나라도 없으면 시작 전에 이름을 알려 주고 멈춘다.
 - Codespace 이미지에는 yosys·magic·netgen만 있고 qflow·graywolf·qrouter·tcsh가 없다(2026-11-01 확인). `designer` 계정의 sudo는 비밀번호를 요구해 apt로 설치할 수 없으므로, `bash scripts/install-qflow-etri050.sh`가 루트 없이 `~/.local/etri050-tools`에 설치한다: tcsh(우분투 패키지를 풀어 씀), graywolf(킷 `Tools/graywolf_build.sh`와 같은 저장소), qrouter 1.4.88(킷 pong_pt1 MPW2025 레이아웃에 기록된 판), 킷의 `qflow-1.4.100_etri050.tar.gz`. 킷 qflow 압축본은 qflow 1.4.100(커밋 b0f76bf)에 `tech/etri050` 추가와 파이썬 정규식 수정만 더한 것이다.
@@ -61,7 +63,7 @@ make qflowsim  # qflow가 합성한 넷리스트(배치·배선에 들어간 것
 
 그림은 홈을 메운 평탄화 GDS를 `klayout -b -r scripts/render_gds.py -rd gds=build/qflow/layout/teg_ctrl_F_fill.gds -rd png=<그림> -rd lyp=$ETRI050_LYP`로 그린 것이다. 확대 그림 `docs/img/teg_ctrl_detail.png`는 `-rd box=250,100,350,160`(µm) 구간이다.
 
-도구: 킷 qflow 1.4.100, graywolf 0.1.6-4-gf47937b(자체 테스트 6개 중 5개 통과 — 전체 배치 흐름 시험 2개와 TimberWolfSC 시험은 기대 파일과 바이트 단위로 같고, 실패 1개는 TimberWolfMC 단독 시험에서 패드 위치가 기대 파일과 다름), qrouter 1.4.88, Yosys 0.70, Magic 8.3.685, Icarus Verilog 14.0. 한 번 실행에 약 22 s(홈 메우기와 두 번째 KLayout 검사 포함).
+도구: 킷 qflow 1.4.100, graywolf 0.1.6-4-gf47937b(자체 테스트 6개 중 5개 통과 — 전체 배치 흐름 시험 2개와 TimberWolfSC 시험은 기대 파일과 바이트 단위로 같고, 실패 1개는 TimberWolfMC 단독 시험에서 패드 위치가 기대 파일과 다름), qrouter 1.4.88, Yosys 0.70, Magic 8.3.685, Icarus Verilog 14.0. 한 번 실행에 약 22 s(홈 메우기와 두 번째 KLayout 검사 포함, 격자 맞춤과 세 번째 검사는 몇 초 더).
 
 | 항목 | 결과 |
 |---|---|
@@ -76,6 +78,7 @@ make qflowsim  # qflow가 합성한 넷리스트(배치·배선에 들어간 것
 | qflow 넷리스트 시뮬레이션 (`make qflowsim`) | `TB RESULT: PASS (157 checks)` |
 | KLayout 공식 규칙 변환 덱 | 284개: 10.MET2.S1 250(간격 0.9 µm 210, 0.8 µm 40), 12.MET3.S1 34(0.9 µm). 모두 한 금속 도형 안의 홈(같은 넷) — 아래 "공식 규칙과 다른 점" |
 | 홈을 메운 사본 (`teg_ctrl_F_fill.gds`) | 금속2 홈 242곳(92.7 µm²)·금속3 34곳(12.2 µm²) 메움, 조각 최대 0.90 µm, 도형 수 그대로(885·387). KLayout 공식 규칙 표시 0 |
+| 격자에 맞춘 사본 (`teg_ctrl_F_grid.gds`) | 0.01 µm 격자 밖 좌표 금속2 3068·접촉 64 → 0, 층마다 도형 수 그대로, 접촉·비아가 금속 밖으로 나간 것 0. KLayout 공식 규칙 표시 0 |
 
 - 셀 겹침 표시 타일: 킷 연구노트22(탁구 게임기, MPW2025 STD-II)는 "전원선을 공유하도록 표준셀이 겹친 것이라 무시해도 좋다"고 설명하고, 킷 `drc_core.sh`도 이 항목을 `drc ignore`한다. 킷 FIR_PE 최종 코어는 24개, 탁구 게임기는 17개였다. 평탄화하면 사라진다(위 표).
 - 핀 위치(블록 좌표, µm): 아래 변(금속2) out 87, cck 528, sle 534, sdi 540, sck 546 / 오른쪽 변(금속3) cbcm_clk 18, cbcm_en[9:0] 195–249 / 위 변(금속2) col_selb·col_sel 6–213, row_selb·row_sel 219–405, ro_en 474–522, ro_in 540–573 / vdd 왼쪽, gnd 오른쪽(금속1). 칩 조립 때 남쪽 패드 순서(SDI, SCK, SLE, OUT, CCK)에 맞춰 아래 변 핀 순서를 다시 정할 수 있다.
@@ -91,3 +94,11 @@ make qflowsim  # qflow가 합성한 넷리스트(배치·배선에 들어간 것
 - 홈 메우기(`scripts/fill_notches.py`): 평탄화 GDS의 금속2·3을 0.49 µm 키웠다 줄여 0.98 µm보다 좁은 틈을 메운다. 메우면 서로 다른 도형이 이어지는 경우에는 출력하지 않고 멈추므로, 한 도형(같은 넷) 안에만 금속을 더한다. 결과는 위 표와 같다(홈 276곳, 공식 규칙 표시 0).
 - 배선만 1.0 µm 간격으로 바꿔 시험하면(LEF의 금속2·3 SPACING 1.0, 7행 배치에서 시험) 배선 실패 10, LVS 오류 80으로 3 µm 트랙에서 통과하지 못한다.
 - 그래서 배치·배선은 킷 설정 그대로 하고, 칩 조립에는 홈을 메운 GDS를 쓸 수 있다(조립 뒤 GDS 기준 LVS로 다시 확인). ETRI에는 같은 넷 홈 0.8–0.9 µm를 허용하는지 확인한다.
+
+### 0.01 µm 설계 격자와 칩 조립용 매크로
+
+- 규칙 문서 3.3은 "설계 격자는 0.01 µm의 정수배"라고 하고, ETRI Calibre 덱은 층마다 OFFGRID를 검사한다(킷 pong_pt1 MPW2025 Calibre 요약의 `OFFGRID_MET2` 등). 킷 KLayout 덱에는 격자 검사가 없다.
+- qflow 배선은 Magic 1/4 λ 단위(0.075 µm, `magscale 1 4`)로 그려진다. 금속2 배선은 폭 1.05 µm로 정수 µm 트랙 위에 놓이므로 변이 x.475·x.525 µm에 오고, 표준셀 접촉 16개도 y가 212.775 µm처럼 격자 밖이다. 홈을 메운 GDS에서 금속2 좌표 3068개(병합 기준)와 접촉 좌표 64개가 격자 밖이다. 제작 선례 FIR_PE Rev_E_20240924 GDS에는 격자 밖 좌표가 없고, pong_pt1(레이아웃 `magscale 1 2`)은 킷에 든 ETRI Calibre 요약(`chip_top/DRC_0/pong_pt1_Pad.drc.summary`)에서 OFFGRID가 모든 층 0이다.
+- `scripts/snap_grid.py`는 격자 밖 좌표(모두 0.005 µm의 홀수배)를 0.005 µm 올린다. 같은 규칙을 모든 층에 쓰므로 변의 순서가 바뀌지 않고, 거리는 한쪽 끝만 격자 밖일 때만 0.005 µm 변한다. 그런 거리는 0.005 µm의 홀수배라 격자 위 값인 규칙 최솟값과 같을 수 없어서, 최솟값을 지키던 거리는 계속 지킨다. 0.6·0.8 µm 정사각형 접촉·비아는 두 변이 같이 움직여 크기가 그대로다. 스크립트는 층마다 도형 수와 접촉·비아가 금속 안에 있는지를 전후로 비교해 하나라도 바뀌면 쓰지 않는다. 결과는 위 표와 같고, 공식 규칙 덱 표시도 0이다.
+- `freeze_macro.sh`가 `teg_ctrl_F_grid.gds`를 `macro/teg_ctrl.gds.gz`로, qflow 레이아웃 라벨의 핀 사각형을 `macro/teg_ctrl_pins.txt`로 고정한다. 칩 조립(`chip/assemble.py`)은 이 매크로를 읽으므로 qflow를 다시 돌려도 칩 쪽 핀 위치가 몰래 바뀌지 않는다. 다시 돌린 결과와 매크로는 `klayout -b -r scripts/gds_xor.py -rd a=<gds> -rd b=<gds>`로 도형을 비교한다(GDS 파일은 시각 정보 때문에 바이트로는 달라진다).
+- 2026-11-01 Codespace에서 `make flow`를 처음부터 다시 돌린 `teg_ctrl_F_grid.gds`와 매크로는 모든 층의 XOR 면적이 0이다(배치·배선이 같은 입력에서 같은 결과를 냄).
