@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Assemble pdkv_Top and check it.
 #   1. inputs, built when missing: pad ring (run_pad_ring.sh), lsplit + mosc (etri050_direct.py),
-#      pnp10 + heater (run_pdk_cells.sh), Kelvin array (etri050_array.py), CBCM block (etri050_cbcm.py);
+#      pnp10 + heater (run_pdk_cells.sh), Kelvin array (etri050_array.py), CBCM block (etri050_cbcm.py),
+#      RO bank (etri050_ro.py);
 #      the control block is the frozen macro in ctrl/macro
 #   2. assemble.py -> build/pdkv_Top.gds + build/pdkv_nets.json, with the chip boundary (layer 0) and
 #      the seal ring of rule document 4.21 unless PDKV_SEAL=0
@@ -23,6 +24,7 @@ B="$HERE/build"
 D="$REPO/designs/etri050/direct/build"
 A="$REPO/designs/etri050/array/build"
 C="$REPO/designs/etri050/cbcm/build"
+R="$REPO/designs/etri050/ro/build"
 mkdir -p "$B"
 REBUILD=0; [ "${1:-}" = "--rebuild" ] && REBUILD=1
 
@@ -40,6 +42,10 @@ fi
 if [ $REBUILD = 1 ] || [ ! -f "$C/cbcm_full.gds" ] || [ ! -f "$C/cbcm_pins.json" ]; then
   mkdir -p "$C"
   python3 "$REPO/designs/etri050/gen/etri050_cbcm.py" > "$C/cbcm.log" 2>&1 || { cat "$C/cbcm.log"; exit 1; }
+fi
+if [ $REBUILD = 1 ] || [ ! -f "$R/robank_flat.gds" ] || [ ! -f "$R/robank_pins.json" ]; then
+  mkdir -p "$R"
+  python3 "$REPO/designs/etri050/gen/etri050_ro.py" > "$R/robank.log" 2>&1 || { cat "$R/robank.log"; exit 1; }
 fi
 
 t0=$(date +%s)
