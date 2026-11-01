@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Run every block check and compare with the values recorded in the chip plan.
 
-usage: python3 run_all.py [tg array kelvin cbcm ro scan pnp lsplit]   (default: all)
+usage: python3 run_all.py [tg array kelvin post cbcm ro scan pnp lsplit]   (default: all; post only when
+designs/etri050/array/build/kelvin_r.json exists, made by designs/etri050/array/kelvin_r.py)
 
 Each line ends with ok or CHECK. CHECK means the result moved outside the tolerance
 (for example a different ngspice version or model file) and needs a look, not that the
 circuit failed. Logs and netlists are in build/.
 """
+import os
 import sys
 import time
 
 import array_kelvin
 import array_path
+import array_post
 import cbcm
 import lsplit
 import pnp_thermo
@@ -52,6 +55,17 @@ def run_kelvin():
     expect('array column-end sense: R_tot error, 10 um line', -r[(10.0, 'column', 0.1)], 1.1, 0.2, '%')
 
 
+def run_post():
+    r = array_post.main()
+    expect('array after layout: R_tot error W9/L0.6, typ path', r[(9, 0.6, 0.1, 'TT', 27)]['typ']['r_err'], 0.16, 0.03, '%')
+    expect_max('array after layout: on-current error after the table (max)',
+               max(v['corrected']['on_err'] for v in r.values()), 0.10, '%')
+    expect_max('array after layout: |dVt| at 27 C (max)',
+               max(abs(x['dvt']) for k, v in r.items() if k[4] == 27 for x in v.values()), 0.02, 'mV')
+    expect_max('array after layout: |dVt| 125 C after open subtraction (max)',
+               max(abs(x['dvt_cor']) for v in r.values() for x in v.values() if 'dvt_cor' in x), 0.08, 'mV')
+
+
 def run_cbcm():
     r = cbcm.main()
     expect('CBCM 300 fF error', 100 * (r[('acc', 300e-15)] / 300e-15 - 1), 1.2, 0.6, '%')
@@ -85,11 +99,11 @@ def run_lsplit():
     expect('Terada-Muta R_sd 125 C', r[('tm', 125)][1], 135.1, 3, 'ohm')
 
 
-STEPS = dict(tg=run_tg, array=run_array, kelvin=run_kelvin, cbcm=run_cbcm, ro=run_ro, scan=run_scan, pnp=run_pnp, lsplit=run_lsplit)
+STEPS = dict(tg=run_tg, array=run_array, kelvin=run_kelvin, post=run_post, cbcm=run_cbcm, ro=run_ro, scan=run_scan, pnp=run_pnp, lsplit=run_lsplit)
 
 
 def main():
-    names = sys.argv[1:] or list(STEPS)
+    names = sys.argv[1:] or [n for n in STEPS if n != 'post' or os.path.exists(array_post.KELVIN_R)]
     for n in names:
         t = time.time()
         print(f"\n== {n}", flush=True)
