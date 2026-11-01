@@ -327,7 +327,10 @@ def draw_band_rails(blk):
                 x_start = X_NG - 3.5
             else:
                 x_start = min(xs) + PAIR_X[0]
-            x_end = {"NG": max(xs) + 38, "VCD": X_VCD[1] + 3.5, "VCR": X_VCR[1] + 3.5}[net]
+            # NG runs on past the last pair's ND column (x 54-60) as it does past every other pair's:
+            # ending at its via (x 38), it left the east pairs' ND without the 0.18 fF that NG adds to
+            # every other ND (cbcm_c.py), and the empty cell 0 is the reference for all of them
+            x_end = {"NG": max(xs) + 66, "VCD": X_VCD[1] + 3.5, "VCR": X_VCR[1] + 3.5}[net]
             blk.r(net, "metal3", x_start, y0, x_end, y1)
 
 

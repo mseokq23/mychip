@@ -1,0 +1,11 @@
+cell,structure,doc_body_fF,doc_lead_fF,doc_pair_fF,doc_dC_fF,nd_switching_fF,nr_switching_fF,nd_facing_held_um,drawn
+0,empty,0.0,0.1,0.0,0.0,2.71,2.71,11.6,
+1,PIP 30x30,461.1,0.74,0.0,461.73,2.71,2.71,40.8,"PIP POLY2 over POLY1: 900.00 um2, 120.02 um"
+2,MET1-field,305.97,0.4,0.0,306.27,2.71,2.71,113.5,
+3,MET2-MET1,303.41,0.28,0.304,303.89,2.71,2.71,11.6,
+4,MET3-MET2,301.25,2.52,0.304,303.97,2.71,2.71,13.6,
+5,MET1 comb,221.12,3.33,0.0,224.35,2.71,2.71,2779.1,
+6,N+ area,305.11,0.76,0.0,305.77,2.71,2.71,15.2,"n+ junction: 404.01 um2, 80.42 um"
+7,N+ edge,337.26,0.82,0.0,337.98,2.71,2.71,15.2,"n+ junction: 253.80 um2, 495.62 um"
+8,gate W48/L10.5,1533.52,1.22,0.0,1534.64,2.71,2.71,11.6,"gate area / source-drain edge: 504.00 um2, 96.00 um"
+9,gate 5xW48/L2.1,1657.78,1.22,0.0,1658.9,2.71,2.71,13.2,"gate area / source-drain edge: 504.00 um2, 480.00 um"

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Run every block check and compare with the values recorded in the chip plan.
 
-usage: python3 run_all.py [tg array kelvin post cbcm cbcm_block ro scan pnp lsplit]   (default: all; post only when
-designs/etri050/array/build/kelvin_r.json exists, made by designs/etri050/array/kelvin_r.py)
+usage: python3 run_all.py [tg array kelvin post cbcm cbcm_block cbcm_post ro scan pnp lsplit]   (default: all; post
+only when designs/etri050/array/build/kelvin_r.json exists, made by designs/etri050/array/kelvin_r.py, and cbcm_post
+only when designs/etri050/cbcm/build/cbcm_c.json exists, made by designs/etri050/cbcm/cbcm_c.py)
 
 Each line ends with ok or CHECK. CHECK means the result moved outside the tolerance
 (for example a different ngspice version or model file) and needs a look, not that the
@@ -17,6 +18,7 @@ import array_path
 import array_post
 import cbcm
 import cbcm_block
+import cbcm_post
 import lsplit
 import pnp_thermo
 import ro_bank
@@ -96,6 +98,20 @@ def run_cbcm_block():
     expect_max('CBCM block idle supply current (max)', max(abs(x) for x in r['idle']) * 1e12, 1.0, 'pA')
 
 
+def run_cbcm_post():
+    r = cbcm_post.main()
+    expect_max('CBCM after layout: empty cell |C|', abs(r[('acc', 0)][0]) * 1e15, 0.05, 'fF')
+    c, e = r[('acc', 2)]
+    expect('CBCM after layout: cell 2 (MET1-field) error', 100 * (c / e - 1), 1.47, 0.3, '%')
+    c, e = r[('acc', 8)]
+    expect('CBCM after layout: cell 8 (gate W48/L10.5) error', 100 * (c / e - 1), 0.22, 0.2, '%')
+    expect_min('CBCM after layout: non-overlap at the gates (min)', r['gap_min'] * 1e9, 0.35, 'ns')
+    expect_max('CBCM after layout: cell 2 error spread, corners/VDD/clock', r['err2_span'], 0.5, '%p')
+    expect_max('CBCM after layout: change with PADR (max)', max(abs(r[('pad', i)]) for i in (2, 8)), 0.4, '%p')
+    expect_max('CBCM after layout: C-V cells 6-9, 1.5-5 V (max)',
+               max(abs(100 * (c / e - 1)) for rows in r['cv'].values() for v, c, e in rows), 1.5, '%')
+
+
 def run_ro():
     r = ro_bank.main()
     for k, f in (('inv', 123.1), ('nand', 93.8), ('nor', 66.8), ('fo4', 52.8), ('wire', 65.0), ('res', 69.1)):
@@ -121,11 +137,12 @@ def run_lsplit():
 
 
 STEPS = dict(tg=run_tg, array=run_array, kelvin=run_kelvin, post=run_post, cbcm=run_cbcm, cbcm_block=run_cbcm_block,
-             ro=run_ro, scan=run_scan, pnp=run_pnp, lsplit=run_lsplit)
+             cbcm_post=run_cbcm_post, ro=run_ro, scan=run_scan, pnp=run_pnp, lsplit=run_lsplit)
+OPTIONAL = {'post': array_post.KELVIN_R, 'cbcm_post': cbcm_post.CJSON}     # default only when their input exists
 
 
 def main():
-    names = sys.argv[1:] or [n for n in STEPS if n != 'post' or os.path.exists(array_post.KELVIN_R)]
+    names = sys.argv[1:] or [n for n in STEPS if n not in OPTIONAL or os.path.exists(OPTIONAL[n])]
     for n in names:
         t = time.time()
         print(f"\n== {n}", flush=True)

@@ -50,19 +50,24 @@ def block_netlist():
     return '\n'.join(out) + '\n'
 
 
-def structures(cells=range(gen.NCELL)):
+def structures(cells=range(gen.NCELL), ideal=None, diode=None):
+    ideal = IDEAL if ideal is None else ideal
+    diode = DIODE if diode is None else diode
     s = ''
     for i in cells:
-        if i in IDEAL:
-            s += f"cs{i} ND{i} 0 {IDEAL[i]:.4e}\n"
-        elif i in DIODE:
-            a, p = DIODE[i]
+        if i in ideal:
+            s += f"cs{i} ND{i} 0 {ideal[i]:.4e}\n"
+        elif i in diode:
+            a, p = diode[i]
             s += f"ds{i} 0 ND{i} ndiode area={a:.4e} pj={p:.4e}\n"
     s += "cpar 0 0 1f\n"
     return s
 
 
-def netlist(sel, vddm=5.0, f=1e6, corner='TT', temp=27, vdd=5.0, rpad=0.0, cells=range(gen.NCELL), clock=True):
+def netlist(sel, vddm=5.0, f=1e6, corner='TT', temp=27, vdd=5.0, rpad=0.0, cells=range(gen.NCELL), clock=True,
+            ideal=None, diode=None, extra=''):
+    """Measurement of cell sel. ideal / diode replace the planned structure values; extra adds lines
+    (cbcm_post.py: the wiring capacitance of the drawn block, on the instance's nodes xb.<net>)."""
     per = 1.0 / f
     # abstol 1e-13 A (simlib: 1e-15): with 1e-15 two runs (FF 27 C, PADR) stopped with "timestep too
     # small" at 9.5 us; 1e-13 gives the same C to 0.01 fF where both finish (TT: 305.51 fF)
@@ -82,7 +87,8 @@ def netlist(sel, vddm=5.0, f=1e6, corner='TT', temp=27, vdd=5.0, rpad=0.0, cells
         n += f"vdut vcd 0 {vddm}\nvref vcr 0 {vddm}\n"
     n += "xb clk " + ' '.join(f"en{i}" for i in range(gen.NCELL)) + " vcd vcr vdd 0 cbcm\n"
     # the structures sit on the block's internal nodes: expose them through the instance
-    n += structures(cells).replace(' ND', ' xb.ND')
+    n += structures(cells, ideal, diode).replace(' ND', ' xb.ND')
+    n += extra
     t0, t1 = 3 * per, 23 * per
     k = sel if sel is not None else 0
     n += f""".control
@@ -108,14 +114,16 @@ quit
     return n
 
 
-def truth_netlist(i, v, corner='TT', temp=27):
+def truth_netlist(i, v, corner='TT', temp=27, ideal=None, diode=None):
     """Q(V)/V of structure i's model: node charged 0 -> v in 200 ns by an ideal source."""
+    ideal = IDEAL if ideal is None else ideal
+    diode = DIODE if diode is None else diode
     n = header(corner, temp, extra=".lib '05cmos_model_260210.lib' DIODE", reltol='1e-6')
     n += f"vx x 0 pwl(0 0 200n {v})\n"
-    if i in IDEAL:
-        n += f"cs x 0 {IDEAL[i]:.4e}\n"
-    elif i in DIODE:
-        a, p = DIODE[i]
+    if i in ideal:
+        n += f"cs x 0 {ideal[i]:.4e}\n"
+    elif i in diode:
+        a, p = diode[i]
         n += f"ds 0 x ndiode area={a:.4e} pj={p:.4e}\n"
     else:
         w, l, nf = gen.GATE_L10 if i == 8 else gen.GATE_L2
