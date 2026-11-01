@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Assemble pdkv_Top and check it.
-#   1. inputs, built when missing: pad ring (run_pad_ring.sh), lsplit + mosc (etri050_direct.py),
+#   1. inputs, built when missing: pad ring (run_pad_ring.sh, ETRI's GPIO cells), lsplit + mosc (etri050_direct.py),
 #      pnp10 + heater (run_pdk_cells.sh), Kelvin array (etri050_array.py), CBCM block (etri050_cbcm.py),
 #      RO bank and resistor RO (etri050_ro.py);
 #      the control block is the frozen macro in ctrl/macro
@@ -28,7 +28,10 @@ R="$REPO/designs/etri050/ro/build"
 mkdir -p "$B"
 REBUILD=0; [ "${1:-}" = "--rebuild" ] && REBUILD=1
 
-if [ $REBUILD = 1 ] || [ ! -f "$B/pdkv_Pad.gds" ]; then bash "$HERE/run_pad_ring.sh" > /dev/null || exit 1; fi
+# pdkv_Pad_magic.gds marks a ring made with ETRI's GPIO cells (pad_gds.py); an older build lacks it
+if [ $REBUILD = 1 ] || [ ! -f "$B/pdkv_Pad.gds" ] || [ ! -f "$B/pdkv_Pad_magic.gds" ]; then
+  bash "$HERE/run_pad_ring.sh" > /dev/null || exit 1
+fi
 if [ $REBUILD = 1 ] || [ ! -f "$D/lsplit.gds" ] || [ ! -f "$D/mosc.gds" ]; then
   python3 "$REPO/designs/etri050/gen/etri050_direct.py" > "$B/direct.log" 2>&1 || { cat "$B/direct.log"; exit 1; }
 fi
