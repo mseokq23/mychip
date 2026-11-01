@@ -9,3 +9,5 @@
 designs/etri050/netlist/
 designs/etri050/teg/build/
 __pycache__/
+designs/etri050/ctrl/build/
+designs/etri050/sim/blocks/build/

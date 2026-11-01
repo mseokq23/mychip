@@ -1,0 +1,79 @@
+padgroup Scan_IO permute
+twpin_sck           nonfixed
+twpin_sdi           nonfixed
+twpin_sle           nonfixed
+twpin_cck           nonfixed
+twpin_out           nonfixed
+restrict side B
+
+padgroup Array_Sel permute
+twpin_row_sel[0]    nonfixed
+twpin_row_sel[1]    nonfixed
+twpin_row_sel[2]    nonfixed
+twpin_row_sel[3]    nonfixed
+twpin_row_sel[4]    nonfixed
+twpin_row_sel[5]    nonfixed
+twpin_row_sel[6]    nonfixed
+twpin_row_sel[7]    nonfixed
+twpin_row_sel[8]    nonfixed
+twpin_row_sel[9]    nonfixed
+twpin_row_sel[10]   nonfixed
+twpin_row_sel[11]   nonfixed
+twpin_row_selb[0]   nonfixed
+twpin_row_selb[1]   nonfixed
+twpin_row_selb[2]   nonfixed
+twpin_row_selb[3]   nonfixed
+twpin_row_selb[4]   nonfixed
+twpin_row_selb[5]   nonfixed
+twpin_row_selb[6]   nonfixed
+twpin_row_selb[7]   nonfixed
+twpin_row_selb[8]   nonfixed
+twpin_row_selb[9]   nonfixed
+twpin_row_selb[10]  nonfixed
+twpin_row_selb[11]  nonfixed
+twpin_col_sel[0]    nonfixed
+twpin_col_sel[1]    nonfixed
+twpin_col_sel[2]    nonfixed
+twpin_col_sel[3]    nonfixed
+twpin_col_sel[4]    nonfixed
+twpin_col_sel[5]    nonfixed
+twpin_col_sel[6]    nonfixed
+twpin_col_sel[7]    nonfixed
+twpin_col_selb[0]   nonfixed
+twpin_col_selb[1]   nonfixed
+twpin_col_selb[2]   nonfixed
+twpin_col_selb[3]   nonfixed
+twpin_col_selb[4]   nonfixed
+twpin_col_selb[5]   nonfixed
+twpin_col_selb[6]   nonfixed
+twpin_col_selb[7]   nonfixed
+restrict side T
+
+padgroup RO_Bank permute
+twpin_ro_en[0]      nonfixed
+twpin_ro_en[1]      nonfixed
+twpin_ro_en[2]      nonfixed
+twpin_ro_en[3]      nonfixed
+twpin_ro_en[4]      nonfixed
+twpin_ro_en[5]      nonfixed
+twpin_ro_in[0]      nonfixed
+twpin_ro_in[1]      nonfixed
+twpin_ro_in[2]      nonfixed
+twpin_ro_in[3]      nonfixed
+twpin_ro_in[4]      nonfixed
+twpin_ro_in[5]      nonfixed
+restrict side T
+
+padgroup CBCM_Sel permute
+twpin_cbcm_en[0]    nonfixed
+twpin_cbcm_en[1]    nonfixed
+twpin_cbcm_en[2]    nonfixed
+twpin_cbcm_en[3]    nonfixed
+twpin_cbcm_en[4]    nonfixed
+twpin_cbcm_en[5]    nonfixed
+twpin_cbcm_en[6]    nonfixed
+twpin_cbcm_en[7]    nonfixed
+twpin_cbcm_en[8]    nonfixed
+twpin_cbcm_en[9]    nonfixed
+twpin_cbcm_clk      nonfixed
+restrict side R
