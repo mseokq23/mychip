@@ -4,7 +4,8 @@
 usage: python3 run_all.py [tg array kelvin post cbcm cbcm_block cbcm_post ro ro_post scan pnp lsplit]   (default:
 all; post only when designs/etri050/array/build/kelvin_r.json exists (designs/etri050/array/kelvin_r.py),
 cbcm_post when designs/etri050/cbcm/build/cbcm_c.json exists (designs/etri050/cbcm/cbcm_c.py), ro_post when
-designs/etri050/ro/build/robank_flat.gds exists (designs/etri050/gen/etri050_ro.py))
+designs/etri050/ro/build/robank_flat.gds exists (designs/etri050/gen/etri050_ro.py; the resistor RO when
+rores_full.gds exists too))
 
 Each line ends with ok or CHECK. CHECK means the result moved outside the tolerance
 (for example a different ngspice version or model file) and needs a look, not that the
@@ -126,6 +127,9 @@ def run_ro_post():
         expect(f'RO bank {k}, plan loads + tap, TT 27 C', r[k]['block'] / 1e6, f, 0.02 * f, 'MHz')
     for k, f in (('inv', 99.2), ('nand', 83.2), ('nor', 60.6), ('wire', 55.9)):
         expect(f'RO bank {k}, drawn wiring, TT 27 C', r[k]['layout'] / 1e6, f, 0.02 * f, 'MHz')
+    if 'res' in r:
+        expect('RO res, plan loads + tap, TT 27 C', r['res']['block'] / 1e6, 68.6, 0.02 * 68.6, 'MHz')
+        expect('RO res, drawn wiring + body C, TT 27 C', r['res']['layout'] / 1e6, 34.2, 0.02 * 34.2, 'MHz')
 
 
 def run_scan():
