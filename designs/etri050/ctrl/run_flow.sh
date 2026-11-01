@@ -19,8 +19,10 @@ W="$HERE/build/qflow"
 
 die() { echo "[flow] ERROR: $*" >&2; exit 1; }
 [ -f "$KIT/tech/etri050.sh" ] || die "kit not found at $KIT (run scripts/setup-etri050.sh)"
+TOOLS="${ETRI050_TOOLS:-$HOME/.local/etri050-tools}"
+if [ -d "$TOOLS/bin" ]; then PATH="$TOOLS/bin:$PATH"; fi
 for t in qflow yosys graywolf qrouter magic netgen tcsh; do
-  command -v "$t" >/dev/null 2>&1 || die "'$t' not found in PATH"
+  command -v "$t" >/dev/null 2>&1 || die "'$t' not found in PATH (install: bash scripts/install-qflow-etri050.sh)"
 done
 
 echo "[flow] kit: $KIT ($(git -C "$KIT" log -1 --format='%h %cs' 2>/dev/null || echo unknown))"
@@ -30,17 +32,20 @@ rm -rf "$W"
 mkdir -p "$W"/{source,synthesis,layout,log,tech/etri050}
 cp "$HERE/$TOP/$TOP.v" "$W/source/"
 
-# technology directory (names from tech/etri050.sh)
+# technology directory: the same links as the kit's Tools/qflow-1.4.100_etri050_build.sh
+# (qflow copies etri050.magicrc to layout/.magicrc; it is the kit template's layout/.magicrc)
 T="$W/tech/etri050"
-ln -s "$KIT/tech/etri050.sh"                         "$T/etri050.sh"
-ln -s "$KIT/tech/etri050.par"                        "$T/etri050.par"
-ln -s "$KIT/tech/etri050.magicrc"                    "$T/etri050.magicrc"
-ln -s "$KIT/tech/etri050_setup.tcl"                  "$T/etri050_setup.tcl"
 ln -s "$KIT/tech/SCN3ME_SUBM.30.ETRI.tech"           "$T/SCN3ME_SUBM.30.ETRI.tech"
+ln -s "$KIT/tech/etri050.par"                        "$T/etri050.par"
+ln -s "$KIT/tech/etri050.sh"                         "$T/etri050.sh"
+ln -s "$KIT/tech/etri050_setup.tcl"                  "$T/etri050_setup.tcl"
+ln -s "$KIT/digital_ETRI/khu_etri050.magicrc"        "$T/etri050.magicrc"
+ln -s "$KIT/digital_ETRI/khu_etri050.prm"            "$T/etri050.prm"
 ln -s "$KIT/digital_ETRI/etri050_stdcells.lef"       "$T/etri050_stdcells.lef"
 ln -s "$KIT/digital_ETRI/khu_etri050_stdcells.spice" "$T/etri050_stdcells.sp"
-ln -s "$KIT/digital_ETRI/khu_etri05_stdcells.lib"    "$T/etri05_stdcells.lib"
 ln -s "$KIT/digital_ETRI/khu_etri050_stdcells.gds2"  "$T/etri05_stdcells.gds2"
+ln -s "$KIT/digital_ETRI/khu_etri05_stdcells.lib"    "$T/etri05_stdcells.lib"
+ln -s "$KIT/digital_ETRI/khu_etri05_stdcells.v"      "$T/etri05_stdcells.v"
 for f in "$T"/*; do [ -e "$f" ] || die "missing kit file for $(basename "$f")"; done
 export QFLOW_TECH_DIR="$T"
 

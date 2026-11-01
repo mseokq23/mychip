@@ -22,6 +22,10 @@ export ETRI050_LYP="$ETRI050_DK/tech/ETRI050_CMOS.lyp"
 export ETRI050_XSCHEMRC="$_etri_ws/designs/etri050/xschemrc"
 export DISPLAY="${DISPLAY:-:1}"   # GUI programs open on the noVNC desktop
 
+# qflow, graywolf, qrouter and tcsh installed without root by scripts/install-qflow-etri050.sh
+_etri_tools="${ETRI050_TOOLS:-$HOME/.local/etri050-tools}/bin"
+if [ -d "$_etri_tools" ] && [[ ":$PATH:" != *":$_etri_tools:"* ]]; then export PATH="$_etri_tools:$PATH"; fi
+
 _etri_netgen() {
   if command -v netgen >/dev/null 2>&1; then netgen "$@"; else netgen-lvs "$@"; fi
 }
