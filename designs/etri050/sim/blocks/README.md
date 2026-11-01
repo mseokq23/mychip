@@ -21,7 +21,7 @@ python3 run_all.py              # 전부
 python3 run_all.py tg pnp       # 일부만
 ```
 
-실행 시간(2코어 측정): tg·array·kelvin·pnp·lsplit은 각각 1분 이내, scan 약 25분(스캔 6회 + 분주 9회), CBCM 약 70분(과도 해석 23회, 회당 약 3분), RO 약 1.5시간(38회, 회당 약 5분). 코어가 늘면 그만큼 준다.
+실행 시간(Codespace 4코어, ngspice-47, 2026-11-01): 전체 약 10분 — RO 384 s(과도 해석 38회), CBCM 128 s(23회), scan 58 s(스캔 6회 + 분주 9회), 나머지는 각각 10 s 이내. 이때 결과는 `BLOCK CHECKS: 23 ok, 0 to check`였다(킷 db09a3d, 111dc09와 문서 PDF 두 개만 다름).
 
 끝에 `BLOCK CHECKS: N ok, M to check`가 나온다. CHECK는 계획 값과 허용 범위 밖이라는 뜻이고(ngspice 판이나 모델 파일이 다를 때 등), 원인을 확인할 대상이다.
 
