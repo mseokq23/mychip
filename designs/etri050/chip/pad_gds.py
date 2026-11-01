@@ -73,6 +73,14 @@ def build(magic: Path, gpio: Path, out: Path):
         o.prune_cell(c.cell_index(), -1)
     if [c.name for c in o.top_cells()] != [mtop.name]:
         raise SystemExit(f"top cells after the swap: {[c.name for c in o.top_cells()]}")
+    # ETRI's GDS places some subcells as 1 x 1 arrays (AREF with real pitch vectors); KLayout writes those
+    # back with zero vectors, which some stream readers refuse. A 1 x 1 array is one placement: write it so.
+    single = 0
+    for c in o.each_cell():
+        for inst in [i for i in c.each_inst() if i.is_regular_array() and i.na == 1 and i.nb == 1]:
+            ci = inst.cell_inst
+            inst.cell_inst = kdb.CellInstArray(ci.cell_index, ci.cplx_trans if ci.is_complex() else ci.trans)
+            single += 1
 
     # checks: the same instances, transforms and cells; the library cells unchanged
     got = Counter(i.cell.name for i in top.each_inst())
@@ -91,8 +99,10 @@ def build(magic: Path, gpio: Path, out: Path):
             if bad:
                 raise SystemExit(f"{name}: differs from the library on {bad}")
     out.parent.mkdir(parents=True, exist_ok=True)
-    o.write(str(out))
-    return used, source
+    opt = kdb.SaveLayoutOptions()
+    opt.libname = mtop.name                            # not the library's name ETRI_NSPL_GPIO_...
+    o.write(str(out), opt)
+    return used, source, single
 
 
 def main(argv=None) -> int:
@@ -101,9 +111,10 @@ def main(argv=None) -> int:
     ap.add_argument("--gpio", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
-    used, source = build(args.magic, args.gpio, args.out)
+    used, source, single = build(args.magic, args.gpio, args.out)
     print(f"wrote {args.out}: {sum(used.values())} instances, cells from " +
-          ", ".join(f"{n} x{used[n]} {source[n]}" for n in sorted(used)))
+          ", ".join(f"{n} x{used[n]} {source[n]}" for n in sorted(used)) +
+          f"; {single} one-by-one arrays written as single placements")
     return 0
 
 

@@ -24,9 +24,9 @@ run_chip.sh       입력이 없으면 만들고(패드 링, 직결 소자, PDK �
 - GPIO 셀은 ETRI 라이브러리 GDS 그대로 쓴다(`pad_gds.py`, 2026-11-02). 킷의 Magic 셀(`pads_ETRI/GDS_Magic`)은 ETRI GDS를 Magic으로 다시 그린 사본이라, 그것으로 쓴 링은 ETRI 셀과 다르다:
   - PANA의 P+/N-well ESD 다이오드(`pdiode10`, 셀마다 12개)에 N-well이 없다. Magic 셀에 nwell 칠이 없어 ETRI-G 양식이 NWELL을 쓰지 않는다(ETRI 원본과 킷의 `GDS_Magic/pdiode10.gds`에는 있음). 그러면 패드에 붙은 p+ 양극이 기판 접촉이 되어 PANA 패드 20개가 모두 기판(VSS)에 붙는다. ETRI GPIO 문서(02_ETRI_5V_GPIO_260615)는 PANA를 N·P 다이오드 셀로 적는다.
   - 모든 셀의 NSD·PSD를 Magic이 확산 종류에서 다시 그려 범위가 다르고, RES·LVSD·DIODE·ESDD 층이 없다.
-  - `pad_gds.py`는 Magic이 정한 배치(셀 64개와 변환 행렬)를 그대로 두고 라이브러리에 있는 셀(PANA, PIC, POB4, PVDD, PVSS, PCORNER, IOFILLER50)을 라이브러리 셀로 바꾼다. 라이브러리에 없는 킷 셀 IOFILLER18(필러 24개, 소자 없음)은 Magic 그대로 한 셀로 평탄화한다. 배치와 변환이 같은지, 바꾼 셀이 라이브러리 셀과 층마다 같은지 확인한다.
+  - `pad_gds.py`는 Magic이 정한 배치(셀 64개와 변환 행렬)를 그대로 두고 라이브러리에 있는 셀(PANA, PIC, POB4, PVDD, PVSS, PCORNER, IOFILLER50)을 라이브러리 셀로 바꾼다. 라이브러리에 없는 킷 셀 IOFILLER18(필러 24개, 소자 없음)은 Magic 그대로 한 셀로 평탄화한다. 배치와 변환이 같은지, 바꾼 셀이 라이브러리 셀과 층마다 같은지 확인한다. ETRI GDS가 1 × 1 배열(AREF)로 놓은 하위 셀 18곳은 한 번 놓기(SREF)로 쓴다: KLayout이 그대로 쓰면 피치가 0인 배열이 되어 읽기를 거부하는 도구가 있다(도형·라벨은 그대로). `build/pdkv_Pad.mag`는 배치 원본일 뿐이고 셀 내용은 결함이 있는 Magic 사본 그대로다.
   - 버전은 ETRI PDK 260820에 든 ETRI_NSPL_GPIO_250610이다. 킷의 Magic 셀이 따른 231208과는 셀마다 비아1·비아2(약 330·290 µm²)와 PIC의 작은 소자 층이 다르고, 두 버전 모두 공식 덱 0이며 문서 규칙 표시(11.VIA2.S1 16개)도 같다.
-  - 확인: 링만 뽑아 패드 포트 넷이 기판의 p+에 닿는지 보면 Magic 링은 PAD 포트 6개(ADF, ASF, LD1F, LSF, LD2F, HT)가 닿고, ETRI 셀 링은 0이다(p+는 N-well 안). 칩에서 기판 탭에 닿는 넷은 VSS와 실링(그리고 POB4 안 가드링 하나)뿐이고, N-well은 VDD·ANW·VCD·VCR·CLO와 PNP 베이스(VSS)에만 붙는다. 칩 GDS의 차이는 모두 패드 셀 자리 안에 있다.
+  - 확인: 링만 뽑아 보면 Magic 링은 PANA 본딩 패드 20개가 모두 기판의 p+(패드마다 다이오드 양극 12개, 1200 µm²)에 닿는다. PAD 포트 6개(ADF, ASF, LD1F, LSF, LD2F, HT)는 본딩 패드와 같은 금속 넷이고, PADR 포트 14개는 직렬 poly2 저항 너머다. ETRI 셀 링은 0이다(양극 240개 모두 N-well 안, 둘레 8.5 µm 이상). 칩에서 기판 탭에 닿는 넷은 VSS와 실링(그리고 POB4 안 가드링 하나)뿐이고, N-well은 VDD·ANW·VCD·VCR·CLO와 PNP 베이스(VSS)에만 붙는다. 칩 GDS의 차이는 모두 패드 셀 자리 안에 있다.
 
 ### 결과 (2026-11-02, 작업 환경 KLayout 0.28.16, 킷 111dc09)
 
