@@ -22,7 +22,7 @@ python3 run_all.py tg pnp       # 일부만
 python3 run_all.py post         # 레이아웃 뒤 어레이(designs/etri050/array/build/kelvin_r.json이 있을 때 기본 실행에도 들어감)
 ```
 
-실행 시간(Codespace 4코어, ngspice-47, 2026-11-01): 전체 약 10분 — RO 384 s(과도 해석 38회), CBCM 128 s(23회), scan 58 s(스캔 6회 + 분주 9회), 나머지는 각각 10 s 이내. 이때 결과는 `BLOCK CHECKS: 23 ok, 0 to check`였다(킷 db09a3d, 111dc09와 문서 PDF 두 개만 다름).
+실행 시간(Codespace 4코어, ngspice-47, 2026-11-01): 전체 약 10분 — RO 384 s(과도 해석 38회), CBCM 128 s(23회), scan 58 s(스캔 6회 + 분주 9회), 나머지는 각각 10 s 이내. 이때 결과는 `BLOCK CHECKS: 23 ok, 0 to check`였다(킷 db09a3d, 111dc09와 문서 PDF 두 개만 다름). CBCM 블록 두 단계가 더해져 cbcm_block 228 s(54회), cbcm_post 373 s(97회)가 늘었고, 두 단계의 15개는 모두 ok였다(같은 날, 같은 환경). 로컬 ngspice-42(2코어)에서도 같은 값이 나온다.
 
 끝에 `BLOCK CHECKS: N ok, M to check`가 나온다. CHECK는 계획 값과 허용 범위 밖이라는 뜻이고(ngspice 판이나 모델 파일이 다를 때 등), 원인을 확인할 대상이다.
 
@@ -33,6 +33,8 @@ python3 run_all.py post         # 레이아웃 뒤 어레이(designs/etri050/arr
 | array_kelvin.py | 드레인 sense를 열 끝에서 받을 때와 셀마다 받을 때(행 선택 TG) 비교, 먼 행·MET2 열 선로 | 셀 sense: R_tot 오차 ≤ 0.01%. 열 끝 sense: +1.1%(선로 10 µm)·+1.8%(6 µm) |
 | array_post.py | 레이아웃 뒤: array_path 하네스에 셀 sense TG, 그린 스위치 크기, 그린 어레이에서 뽑은 Kelvin 루프 안 저항(`designs/etri050/array/kelvin_r.py`) | W/L 9/0.6 R_tot +0.16 %(typ)·+0.24 %(최대), typ 표를 빼면 ≤ 0.08 %, 다른 셀 ≤ 0.03 %. ΔVt 27 °C ≤ 0.004 mV, 125 °C open 뺀 뒤 ≤ 0.047 mV |
 | cbcm.py | CBCM 정확도·주파수·PADR 영향·125 °C·C–V | 300 fF +1.2%, 1 pF +0.3%, PADR 영향 ≤ 0.3%p |
+| cbcm_block.py | 그린 CBCM 블록의 회로 넷리스트(`designs/etri050/gen/etri050_cbcm.py`): 비중첩 생성기, 셀마다 PMOS 게이트 NAND2X1, 공통 NMOS 게이트, 10개 셀과 구조 모델(PIP·N+는 PDK 모델, 금속은 규칙 문서 값). 5코너·125 °C·VDD 4.5/5.5 V·0.2/1/5 MHz | 300 fF 셀 +1.49 %, 게이트 +0.2 %, 빈 셀 0.00 fF, 비중첩 ≥ 0.30 ns(FF, 4.5 V), 미선택 셀 영향 0.002 %, PADR +0.24 %p, C–V(1.5–5 V) ≤ 0.51 % |
+| cbcm_post.py | 레이아웃 뒤 CBCM: cbcm_block의 넷리스트에 그린 블록의 배선 용량(`designs/etri050/cbcm/cbcm_c.py`, 규칙 문서 용량표)과 그린 기하의 구조 모델(PIP pipcap_i, N+ ndiode, 게이트 nmos4)을 넣는다. N+ 셀은 ndiode와 nmos4 소스·드레인 접합 값을 함께 낸다 | 빈 셀 0.00 fF, 셀 2 +4.50 fF(+1.47 %, 코너·VDD·클록에 따라 +1.34–1.68 %), 게이트 +0.2 %, 비중첩 ≥ 0.47 ns, PADR +0.25 %p, C–V(셀 6–9, 1.5–5 V) ≤ 0.96 % |
 | ro_bank.py | 31단 RO 6종 × 5코너(27 °C) + TT 125 °C, INV RO의 VDD 4.5–5.5 V | INV 123.1, NAND 93.8, NOR 66.8, FO4 52.8, 배선 65.0, 저항 69.1 MHz(TT 27 °C) |
 | scan_divider.py | 8비트 스캔 + 섀도 + 3→8 디코더(3 PVT × 1·10 MHz), 분주기 ÷16(100–200 MHz) | 모두 정상 |
 | pnp_thermo.py | pnp10 온도계(PADR 경유) 3전류법 대 2전류법 | 3전류법 오차 ≤ +0.16 K(27–125 °C), 2전류법 −4.9 K(125 °C) |

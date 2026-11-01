@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Run every block check and compare with the values recorded in the chip plan.
 
-usage: python3 run_all.py [tg array kelvin post cbcm ro scan pnp lsplit]   (default: all; post only when
-designs/etri050/array/build/kelvin_r.json exists, made by designs/etri050/array/kelvin_r.py)
+usage: python3 run_all.py [tg array kelvin post cbcm cbcm_block cbcm_post ro scan pnp lsplit]   (default: all; post
+only when designs/etri050/array/build/kelvin_r.json exists, made by designs/etri050/array/kelvin_r.py, and cbcm_post
+only when designs/etri050/cbcm/build/cbcm_c.json exists, made by designs/etri050/cbcm/cbcm_c.py)
 
 Each line ends with ok or CHECK. CHECK means the result moved outside the tolerance
 (for example a different ngspice version or model file) and needs a look, not that the
@@ -16,6 +17,8 @@ import array_kelvin
 import array_path
 import array_post
 import cbcm
+import cbcm_block
+import cbcm_post
 import lsplit
 import pnp_thermo
 import ro_bank
@@ -33,6 +36,11 @@ def expect(name, value, ref, tol, unit=''):
 def expect_max(name, value, limit, unit=''):
     good = value <= limit
     ROWS.append((name, value, limit, None, unit, good))
+
+
+def expect_min(name, value, limit, unit=''):
+    good = value >= limit
+    ROWS.append((name, value, limit, 'min', unit, good))
 
 
 def run_tg():
@@ -75,6 +83,35 @@ def run_cbcm():
                max(abs(100 * (a / b - 1)) for v, a, b in r['cv'] if v > 1.5), 1.0, '%')
 
 
+def run_cbcm_block():
+    r = cbcm_block.main()
+    c, t = r[('acc', 2)]
+    expect('CBCM block cell 2 (MET1-field) error', 100 * (c / t - 1), 1.49, 0.3, '%')
+    c, t = r[('acc', 8)]
+    expect('CBCM block cell 8 (gate W48/L10.5) error', 100 * (c / t - 1), 0.21, 0.2, '%')
+    expect_max('CBCM block empty cell |C|', abs(r[('acc', 0)][0]) * 1e15, 0.05, 'fF')
+    expect_min('CBCM block non-overlap at the gates (min)', r['gap_min'] * 1e9, 0.2, 'ns')
+    expect_max('CBCM block unselected cells, cell 2', abs(r['others']), 0.01, '%')
+    expect_max('CBCM block change with PADR (max)', max(abs(r[('pad', i)]) for i in (2, 8)), 0.4, '%p')
+    expect_max('CBCM block C-V vs model Q/V, 1.5-5 V (max)',
+               max(abs(100 * (c / t - 1)) for v, c, t in r['cv']), 1.0, '%')
+    expect_max('CBCM block idle supply current (max)', max(abs(x) for x in r['idle']) * 1e12, 1.0, 'pA')
+
+
+def run_cbcm_post():
+    r = cbcm_post.main()
+    expect_max('CBCM after layout: empty cell |C|', abs(r[('acc', 0)][0]) * 1e15, 0.05, 'fF')
+    c, e = r[('acc', 2)]
+    expect('CBCM after layout: cell 2 (MET1-field) error', 100 * (c / e - 1), 1.47, 0.3, '%')
+    c, e = r[('acc', 8)]
+    expect('CBCM after layout: cell 8 (gate W48/L10.5) error', 100 * (c / e - 1), 0.22, 0.2, '%')
+    expect_min('CBCM after layout: non-overlap at the gates (min)', r['gap_min'] * 1e9, 0.35, 'ns')
+    expect_max('CBCM after layout: cell 2 error spread, corners/VDD/clock', r['err2_span'], 0.5, '%p')
+    expect_max('CBCM after layout: change with PADR (max)', max(abs(r[('pad', i)]) for i in (2, 8)), 0.4, '%p')
+    expect_max('CBCM after layout: C-V cells 6-9, 1.5-5 V (max)',
+               max(abs(100 * (c / e - 1)) for rows in r['cv'].values() for v, c, e in rows), 1.5, '%')
+
+
 def run_ro():
     r = ro_bank.main()
     for k, f in (('inv', 123.1), ('nand', 93.8), ('nor', 66.8), ('fo4', 52.8), ('wire', 65.0), ('res', 69.1)):
@@ -99,11 +136,13 @@ def run_lsplit():
     expect('Terada-Muta R_sd 125 C', r[('tm', 125)][1], 135.1, 3, 'ohm')
 
 
-STEPS = dict(tg=run_tg, array=run_array, kelvin=run_kelvin, post=run_post, cbcm=run_cbcm, ro=run_ro, scan=run_scan, pnp=run_pnp, lsplit=run_lsplit)
+STEPS = dict(tg=run_tg, array=run_array, kelvin=run_kelvin, post=run_post, cbcm=run_cbcm, cbcm_block=run_cbcm_block,
+             cbcm_post=run_cbcm_post, ro=run_ro, scan=run_scan, pnp=run_pnp, lsplit=run_lsplit)
+OPTIONAL = {'post': array_post.KELVIN_R, 'cbcm_post': cbcm_post.CJSON}     # default only when their input exists
 
 
 def main():
-    names = sys.argv[1:] or [n for n in STEPS if n != 'post' or os.path.exists(array_post.KELVIN_R)]
+    names = sys.argv[1:] or [n for n in STEPS if n not in OPTIONAL or os.path.exists(OPTIONAL[n])]
     for n in names:
         t = time.time()
         print(f"\n== {n}", flush=True)
@@ -111,7 +150,7 @@ def main():
         print(f"   ({time.time() - t:.0f} s)", flush=True)
     print('\n== summary')
     for name, v, ref, tol, unit, good in ROWS:
-        lim = f"<= {ref:g}" if tol is None else f"{ref:g} +/- {tol:g}"
+        lim = f"<= {ref:g}" if tol is None else f">= {ref:g}" if tol == 'min' else f"{ref:g} +/- {tol:g}"
         print(f"{'ok   ' if good else 'CHECK'} {name:48s} {v:10.4g} {unit:4s} (plan {lim})")
     bad = sum(1 for r in ROWS if not r[5])
     print(f"BLOCK CHECKS: {len(ROWS) - bad} ok, {bad} to check")

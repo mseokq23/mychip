@@ -45,6 +45,12 @@ def setup():
                     if m.isfile() and os.path.basename(m.name) in MODELS:
                         m.name = os.path.basename(m.name)
                         t.extract(m, BUILD)
+    # One ngspice thread per run: the block scripts run one ngspice per core, and ngspice's own
+    # OpenMP threads (2 by default) then oversubscribe the cores. Two runs at once on 2 cores took
+    # 9 min each instead of 11 s (2026-11-01); the results are the same.
+    init = os.path.join(BUILD, '.spiceinit')
+    if not os.path.exists(init):
+        open(init, 'w').write('set num_threads=1\n')
     cells = os.path.join(BUILD, 'stdcells.spice')
     if not os.path.exists(cells):
         txt = open(os.path.join(kit_dir(), 'digital_ETRI', 'khu_etri050_stdcells.spice')).read()
@@ -53,8 +59,8 @@ def setup():
         open(cells, 'w').write(txt)
 
 
-def header(corner='TT', temp=27, extra='', reltol='1e-4', method=''):
-    opts = f'.options gmin=1e-15 abstol=1e-15 reltol={reltol}' + (f' method={method}' if method else '')
+def header(corner='TT', temp=27, extra='', reltol='1e-4', method='', abstol='1e-15'):
+    opts = f'.options gmin=1e-15 abstol={abstol} reltol={reltol}' + (f' method={method}' if method else '')
     return (f"* block check\n.lib '05cmos_mosfet_corner.lib' {corner}\n.include 'stdcells.spice'\n"
             f"{opts}\n.temp {temp}\n{extra}\n")
 

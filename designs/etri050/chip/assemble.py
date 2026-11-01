@@ -8,6 +8,7 @@ ring keeps its own die coordinates, 97.5-1802.5 um):
   lsplit, mosc  designs/etri050/direct/build/*.gds            (etri050_direct.py, Magic style ETRI)
   pnp10, heater designs/etri050/direct/build/*.gds            (run_pdk_cells.sh)
   karray        designs/etri050/array/build/karray.gds        (etri050_array.py, Magic style ETRI)
+  cbcm          designs/etri050/cbcm/build/cbcm_full.gds      (etri050_cbcm.py: Magic, flattened, + PIP)
 
 The routes drawn here follow the rule document v1.1, not only the kit deck: VIA1/VIA2 exactly
 0.8 x 0.8 um and 0.8 um apart with 0.6 um of metal around, no via1 on a contact and no via2 on a
@@ -16,7 +17,8 @@ pad ports are reached straight on, away from the other port of each PANA). Power
 lines are 9 um wide, just under the 10 um wide-metal class. Every coordinate is on the 0.01 um grid.
 
 Floorplan (die um; the core window inside the GPIO cells is 442-1458): control block at x 537-1141,
-y 460-761 (the array, RO and CBCM come above it and to its right later); scan channel y 442-460
+y 460-761 (the array above it, the CBCM block at x 1144-1440, y 454-781 to its right, the RO bank
+later); scan channel y 442-460
 under it; VSS as a metal1 line along the south and east edges from PVSS (E5) to the control block
 ground bar and PNP2, plus a separate branch from PVSS to PNP1 and the L-split substrate tap; MOS-C on
 the east edge between CHI (E3) and CLO (E4); L-split under its source force pad (N4) with the force
@@ -38,6 +40,7 @@ placements) for chip_check.py.
 
 usage: klayout -b -r designs/etri050/chip/assemble.py -rd repo=<repo root> [-rd out=<dir>]
        [-rd pad=<pdkv_Pad.gds>] [-rd direct=<dir with lsplit, mosc, pnp10, heater .gds>] [-rd seal=0]
+       [-rd array=<karray.gds>] [-rd cbcm=<cbcm_full.gds>]
 """
 import json
 import os
@@ -57,8 +60,10 @@ SRC = {
     'heater': os.path.join(DIRECT, 'heater.gds'),
     'seal': os.path.join(OUT, 'pdkv_seal.gds'),
     'karray': globals().get('array') or os.path.join(REPO, 'designs/etri050/array/build/karray.gds'),
+    'cbcm': globals().get('cbcm') or os.path.join(REPO, 'designs/etri050/cbcm/build/cbcm_full.gds'),
 }
 ARRPINS = os.path.join(os.path.dirname(SRC['karray']), 'karray_pins.json')
+CBPINS = os.path.join(os.path.dirname(SRC['cbcm']), 'cbcm_pins.json')
 SEAL = str(globals().get('seal', '1')) != '0'
 PINFILE = os.path.join(REPO, 'designs/etri050/ctrl/macro/teg_ctrl_pins.txt')
 PADFILE = os.path.join(os.path.dirname(SRC['pad']), 'pad_pins.json')
@@ -542,6 +547,65 @@ rect('m1', gx0, 446.00, gx1, gy0 + 1.20)
 rect('m1', gx0, 446.00, 456.00, 455.00)
 expect('VSS', 'array VSS strap', 'm1', (gx0 + gx1) / 2, gy0 + 5.00)
 print(f'array channel: {n_tracks} tracks, row bus x {min(bus_x.values())}-{max(bus_x.values())}')
+
+# ---- CBCM block (designs/etri050/gen/etri050_cbcm.py; cbcm_full.gds = Magic's flattened copy + the PIP) ----
+# Block origin (lower left of its frame) at die (1144.0, 456.0): east of the control block, its generator
+# row's gnd rail on the south VSS line, its east edge (1439.8) 7.2 um inside the east VSS line. Its
+# west-edge pins sit at the control block's cbcm_clk / cbcm_en pin heights (0.02 um apart).
+CB = (1144.00, 456.00)
+place('cbcm', *CB, name='cbcm')
+cbj = json.load(open(CBPINS))
+if [round(v, 2) for v in cbj['origin_die']] != list(CB):
+    raise RuntimeError(f"cbcm_pins.json was drawn for origin {cbj['origin_die']}, not {CB}")
+
+
+def cpin(name):
+    x0, y0, x1, y1 = cbj['pins'][name]['box']
+    return round(CB[0] + x0, 3), round(CB[1] + y0, 3), round(CB[0] + x1, 3), round(CB[1] + y1, 3)
+
+
+# clock and enables: control block pin (metal3, x 1136.7-1137.9) -> block pin (metal3, x 1144.0-1145.2).
+# The control block's own cbcm_en[2] route turns up at x 1139.7-1140.9 (y 684.9-698.1), east of the
+# en3 and en4 pins: those two cross it in metal2 (via2 on each pin)
+for net, pin in [('clk', 'cbcm_clk')] + [(f'en{i}', f'cbcm_en[{i}]') for i in range(10)]:
+    x1, y1, x2, y2 = pin_die(pin)
+    bx1, by1, bx2, by2 = cpin(net)
+    if net in ('en3', 'en4'):
+        cx, cy = round((x1 + x2) / 2, 2), round((y1 + y2) / 2, 2)
+        bx, by = round((bx1 + bx2) / 2, 2), round((by1 + by2) / 2, 2)
+        via(2, cx, cy)
+        via(2, bx, by)
+        rect('m2', cx - 1.00, min(cy, by) - 1.00, bx + 1.00, max(cy, by) + 1.00)   # covers both via pads
+    else:
+        rect('m3', x1, min(y1, by1), bx2, max(y2, by2))
+    expect('CBCM_' + net.upper(), f'ctrl {pin}', 'm3', (x1 + x2) / 2, (y1 + y2) / 2)
+    expect('CBCM_' + net.upper(), f'cbcm {net}', 'm3', (bx1 + bx2) / 2, (by1 + by2) / 2)
+# VDD: S7 PVDD straight up across the south VSS line into the block's VDD riser (metal2, x 1339.0-1345.0)
+vx1, vy1, vx2, vy2 = cpin('VDD')
+rect('m2', vx1, pads['S7:PVDD'][1], vx2, vy2)
+port_probe('VDD', 'S7:PVDD')
+expect('VDD', 'cbcm VDD riser', 'm2', (vx1 + vx2) / 2, CB[1] + 40.00)
+# VSS: the two NAND-row gnd rails (metal1, east ends) -> the east VSS line; the generator row's gnd rail
+# lies on the south VSS line
+for rail in ('VSS_low_rail', 'VSS_up_rail'):
+    ry0, ry1 = (round(CB[1] + v, 2) for v in cbj['rails'][rail])
+    rect('m1', cpin('VSS')[0], ry0, 1448.00, ry1)
+    expect('VSS', f'cbcm {rail}', 'm1', CB[0] + 200.00, (ry0 + ry1) / 2)
+expect('VSS', 'cbcm generator gnd rail', 'm1', CB[0] + 100.00, CB[1] + 0.60)
+# VCD: the lower band's VCD rail (metal3, ends at block x 290.85) on east over the VCR riser, down in metal2
+# between the block and the east VSS line, east into E1 PADR (y 506.65-533.85; its PAD port is above)
+dx1, dy1, dx2, dy2 = cpin('VCD')                   # bottom of the VCD riser = the lower band's VCD rail
+rect('m3', dx2, dy1, 1444.00, dy1 + 1.20)
+via(2, 1443.00, round(dy1 + 0.60, 2))
+rect('m2', 1442.00, 519.00, 1444.00, round(dy1 + 0.60, 2))
+rect('m2', 1442.00, 519.00, 1459.40, 521.00)
+port_probe('VCD', 'E1:VCD')
+expect('VCD', 'cbcm VCD riser', 'm2', (dx1 + dx2) / 2, CB[1] + 150.00)
+# VCR: east from the VCR riser (metal2, block x 291.6-292.8) at its port height straight into E2 PADR
+rx1, ry1, rx2, ry2 = cpin('VCR')
+rect('m2', rx1, ry1 - 0.40, 1459.40, ry2 + 0.40)
+port_probe('VCR', 'E2:VCR')
+expect('VCR', 'cbcm VCR riser', 'm2', (rx1 + rx2) / 2, CB[1] + 150.00)
 
 # ---- seal ring: its three metals are one piece through its via lines and join no other net --------
 if SEAL:
