@@ -97,8 +97,10 @@ EOF
 #  - Magic DRC of the block flattened by the kit's mag2gds.sh (${TOP}_F): the hierarchical
 #    "can't abut or partially overlap between subcells" tiles cannot occur in a flat cell
 #  - KLayout DRC of the flattened ETRI GDS with the kit's conversion of the official rule deck.
-#    The kit LEF and cells use 0.9 um metal2/metal3 spacing where the official rule is 1.0 um,
-#    so markers of those two rules are expected (see README).
+#    The kit routing (3.0 um tracks, 2.1 um via pads) leaves 0.8-0.9 um notches inside one
+#    metal2/metal3 polygon (two via pads of the same route), where the official rule asks 1.0 um,
+#    so markers of those two rules are expected. A copy with the notches filled
+#    (scripts/fill_notches.py) is checked with the same deck (see README).
 bash "$KIT/scripts/mag2gds.sh" "$TOP" > "${TOP}_mag2gds.log" 2>&1
 magic -dnull -noconsole > "${TOP}_F_DRC.log" 2>&1 << EOF
 drc off
@@ -116,6 +118,17 @@ KLAYOUT_PATH="${KLAYOUT_HOME:-$HOME/.klayout}" klayout -b \
   -r "$KIT/tech/Klayout_DRC_Script/etri_05um_generated_final.drc" \
   -rd gdsfile="${TOP}_F.gds" -rd resultsfile="${TOP}_F_klayout.lyrdb" > "${TOP}_F_klayout.log" 2>&1
 python3 "$REPO/scripts/lyrdb_summary.py" "${TOP}_F_klayout.lyrdb" 0 > "${TOP}_F_klayout.txt" 2>&1
+rm -f "${TOP}_F_fill.gds" "${TOP}_F_fill_klayout.lyrdb"
+KLAYOUT_PATH="${KLAYOUT_HOME:-$HOME/.klayout}" klayout -b -r "$REPO/scripts/fill_notches.py" \
+  -rd infile="${TOP}_F.gds" -rd outfile="${TOP}_F_fill.gds" > "${TOP}_F_fill.log" 2>&1
+if [ -f "${TOP}_F_fill.gds" ]; then
+  KLAYOUT_PATH="${KLAYOUT_HOME:-$HOME/.klayout}" klayout -b \
+    -r "$KIT/tech/Klayout_DRC_Script/etri_05um_generated_final.drc" \
+    -rd gdsfile="${TOP}_F_fill.gds" -rd resultsfile="${TOP}_F_fill_klayout.lyrdb" > "${TOP}_F_fill_klayout.log" 2>&1
+  python3 "$REPO/scripts/lyrdb_summary.py" "${TOP}_F_fill_klayout.lyrdb" 0 > "${TOP}_F_fill_klayout.txt" 2>&1
+else
+  echo "notch fill not written (see ${TOP}_F_fill.log)" > "${TOP}_F_fill_klayout.txt"
+fi
 cd ..
 
 {
@@ -129,4 +142,6 @@ cd ..
   echo "-- size";      grep -E 'microns|lambda' "layout/${TOP}_size.log" | tail -2
   echo "-- flat Magic DRC (${TOP}_F)"; grep -E 'error tiles|Total DRC|No errors' "layout/${TOP}_F_DRC.log" | tail -2
   echo "-- KLayout DRC, official rules (${TOP}_F.gds)"; grep -E 'markers|^[0-9A-Za-z_.]+: [0-9]+$|distance' "layout/${TOP}_F_klayout.txt"
+  echo "-- notch fill (${TOP}_F_fill.gds)"; grep -E 'metal[23]:|wrote|Error|error' "layout/${TOP}_F_fill.log"
+  echo "-- KLayout DRC, official rules (${TOP}_F_fill.gds)"; grep -E 'markers|^[0-9A-Za-z_.]+: [0-9]+$|distance|not written' "layout/${TOP}_F_fill_klayout.txt"
 } | tee flow_summary.txt
