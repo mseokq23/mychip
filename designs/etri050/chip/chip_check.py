@@ -18,7 +18,9 @@ its terminals and the result says what the metal alone connects.
   5. star nets (pdkv_nets.json 'star'): the chip is extracted again without the joint block (VSS: the
      pad ring, whose PVSS pad joins the branches) and the probe points of each branch of the net must be
      one net, and no two branches one net: the heater's return current and the PNP1 / L-split ground
-     share no metal with the core's ground.
+     share no metal with the core's ground;
+  6. wells on the GDS itself: every gate has one implant, PSD in an N-well or NSD outside one, and no
+     bond pad but PVSS reaches p+ in the substrate (see wells()).
 
 The control block, the L-split, the MOS-C, the array, the CBCM block, the RO bank and the resistor RO
 also pass their own LVS (qflow/kit Netgen, etri-check; the resistor RO also at device level with its
@@ -223,10 +225,75 @@ def main(spec_file):
               + (f" ({len(gone)} instances of {st['joint']} removed)" if len(gone) != 1 else ''))
         star_bad += problems > 0
     bad += star_bad
+
+    # 6. wells and substrate on the GDS itself (block LVS compares Magic's database, not the GDS it writes)
+    well_bad = wells(spec)
+    bad += well_bad
     print(f"chip check: {len(spec['nets'])} nets, {sum(len(v) for v in spec['nets'].values())} points, "
           f"{shorts} shorts, {flo} floating pieces, {sum(grid.values())} off-grid coordinates, "
-          f"{len(spec.get('star', [])) - star_bad} of {len(spec.get('star', []))} star nets apart -> "
-          f"{'PASS' if bad == 0 else f'{bad} problem(s)'}")
+          f"{len(spec.get('star', [])) - star_bad} of {len(spec.get('star', []))} star nets apart, "
+          f"{well_bad} well/substrate problems -> {'PASS' if bad == 0 else f'{bad} problem(s)'}")
+
+
+def wells(spec):
+    """Gates in the right well, and no bond pad but PVSS tied to the substrate through p+.
+
+    Every gate (ACT and POLY1) must carry one implant, PSD inside an N-well or NSD outside one. Then the
+    p+ in the substrate (ACT and PSD outside NWELL, not under POLY1) is joined to the metal through its
+    contacts: a net that holds such p+ and reaches a bond pad (PAD layer 37 over its metal3) ties that pad
+    to the substrate, which only the VSS pad may do. (The kit's Magic copy of the PANA pad cell lost the
+    N-well of its P+/N-well ESD diodes, which did exactly this to 20 pads; see pad_gds.py.)
+    """
+    ly = pya.Layout()
+    ly.read(spec['top'])
+    top = ly.top_cell()
+    ly.flatten(top.cell_index(), -1, True)
+    l2n = pya.LayoutToNetlist(pya.RecursiveShapeIterator(ly, top, []))
+    lay = {}
+    for name, n in (('nwell', 2), ('act', 11), ('poly1', 12), ('nsd', 14), ('psd', 15), ('cont', 31)) + LAYERS:
+        li = ly.find_layer(n, 0)
+        lay[name] = l2n.make_layer(li if li is not None else ly.layer(n, 0), name)
+    gate = lay['act'] & lay['poly1']
+    gate_bad = {'p-type outside an N-well': (gate & lay['psd']) - lay['nwell'],
+                'n-type inside an N-well': (gate & lay['nsd']) & lay['nwell'],
+                'without an implant': (gate - lay['nsd']) - lay['psd'],
+                'with both implants': gate & lay['nsd'] & lay['psd']}
+    ptap = ((lay['act'] & lay['psd']) - lay['nwell']) - lay['poly1']
+    l2n.register(ptap, 'ptap')
+    for r in (ptap, lay['cont'], lay['m1'], lay['v1'], lay['m2'], lay['v2'], lay['m3']):
+        l2n.connect(r)
+    for a, b in ((ptap, lay['cont']), (lay['cont'], lay['m1']), (lay['m1'], lay['v1']), (lay['v1'], lay['m2']),
+                 (lay['m2'], lay['v2']), (lay['v2'], lay['m3'])):
+        l2n.connect(a, b)
+    l2n.extract_netlist()
+    pli = ly.find_layer(37, 0)
+    pads = pya.Region(top.begin_shapes_rec(pli)) if pli is not None else pya.Region()
+    vss = set()
+    for p in spec['nets'].get('VSS', []):
+        n = l2n.probe_net(lay[p['layer']], pya.DPoint(p['x'], p['y']))
+        if n is not None:
+            vss.add(n.cluster_id)
+    circuit = next(l2n.netlist().each_circuit_top_down())
+    tied, sub_nets = [], 0
+    for n in circuit.each_net():
+        if l2n.shapes_of_net(n, ptap, True).is_empty():
+            continue
+        sub_nets += 1
+        if n.cluster_id in vss:
+            continue
+        on_pad = l2n.shapes_of_net(n, lay['m3'], True) & pads
+        if not on_pad.is_empty():
+            tied.append(on_pad.bbox().to_dtype(ly.dbu))
+    problems = sum(r.count() for r in gate_bad.values()) + len(tied)
+    print(f"  wells: {gate.count()} gates, " + ", ".join(f"{r.count()} {k}" for k, r in gate_bad.items())
+          + f"; p+ substrate taps on {sub_nets} nets, bond pads tied to the substrate other than PVSS: {len(tied)}"
+          + f" -> {'ok' if problems == 0 else 'PROBLEM'}")
+    for k, r in gate_bad.items():
+        for poly in list(r.each())[:5]:
+            print(f"    gate {k}: {poly.bbox().to_dtype(ly.dbu)}")
+    for box in tied[:10]:
+        print(f"    bond pad tied to the substrate through p+: {box}")
+    return problems
 
 
 main(globals().get('nets') or 'pdkv_nets.json')

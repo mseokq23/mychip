@@ -10,7 +10,8 @@
 #   4. scripts/metal_rules.py: rules 7-12 with the rule document's values (via spacing 0.8 um, the
 #      deck uses 0.5) and the seal ring against the 4.21 figure, markers also found in the pad ring
 #      alone counted apart
-#   5. chip_check.py: metal connectivity (opens, shorts, floating metal) and the 0.01 um grid
+#   5. chip_check.py: metal connectivity (opens, shorts, floating metal), the 0.01 um grid, the VSS star,
+#      gates in the right well and no bond pad but PVSS on substrate p+
 #   6. scripts/antenna_rules.py: the rule document's antenna rules (3.PL1/8.MET1/10.MET2/12.MET3.ANT)
 # Usage: [PDKV_SEAL=0] bash run_chip.sh [--rebuild]   (--rebuild remakes the inputs too)
 set -uo pipefail
@@ -71,7 +72,7 @@ klayout -b -r "$REPO/scripts/antenna_rules.py" -rd gds="$B/pdkv_Top.gds" -rd net
   echo "-- rules 7-12 and seal ring 4.21, rule document values (baseline: pad ring alone)"
   cat "$B/pdkv_Top_metal_rules.txt"
   echo "-- chip check (metal connectivity, grid)"
-  grep -E 'grid|OPEN|SHORT|FLOATING|not found|star|chip check' "$B/chip_check.log"
+  grep -E 'grid|OPEN|SHORT|FLOATING|not found|star|wells|gate |bond pad|chip check' "$B/chip_check.log"
   echo "-- antenna, rule document v1.1 (ratio per gate type, no diode credit; 'diffusion': the net reaches a junction)"
   cat "$B/pdkv_Top_antenna.txt"
 } | tee "$B/chip_summary.txt"
