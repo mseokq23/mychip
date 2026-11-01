@@ -12,11 +12,12 @@ block, which picks one RO (rosel) and divides it by 256 onto OUT.
   index 4  wire  stages 1-30 INVX1, and every stage's output (0-30) carries a metal1 serpentine
                  0.9 um wide, three 99.6 um legs (about 307 um) over field: the plan's 300 um MET1 load
 
-The plan's FO4 RO (index 3) and poly2-resistor RO (index 5) are not built: with the wire RO's metal
-the bank fills the place left for it (x 856-1210, y 823-1146 um on the die), and FO4 alone needs four
-more rows. The plan drops FO4 first when area is short ("게이트 용량은 CBCM이 직접 잼"); the
-resistor RO's poly2 is measured directly by the heater (R and its temperature coefficient). Their
-control-block ports stay as they are (ro_en3/5 unconnected outputs, ro_in3/5 tied to VSS).
+The plan's FO4 RO (index 3) and poly2-resistor RO (index 5) are not in this block: with the wire RO's
+metal the bank fills the place left for it (x 856-1210, y 823-1146 um on the die). FO4 alone needs four
+more rows and fits nowhere on the chip; the plan drops it first when area is short ("게이트 용량은
+CBCM이 직접 잼"). The resistor RO (one row and 30 poly2 resistors of 80 um) fits the free strip above
+the heater's return line (x 932-1405, y 1160-1297 um) and goes there as a block of its own. Until then
+their control-block ports stay as they are (ro_en3/5 unconnected outputs, ro_in3/5 tied to VSS).
 
 Layout (lambda = 0.3 um, block origin = lower left, die (856.0, 826.0)): six standard-cell rows of
 120 lambda, odd rows flipped so that neighbours share a rail (gnd at y 0, 240, 480, 720; vdd at 120,
