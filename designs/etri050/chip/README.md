@@ -1,6 +1,6 @@
 # 칩 조립 pdkv
 
-PDK 모델 검증용 온칩 특성화 IC의 최상위 조립이다. 킷의 칩 조립 방식(FIR_PE MPW240925002, pong_pt1 MPW2025 STD-II)처럼 패드 링(`pdkv_Pad`)과 코어를 따로 만들어 최상위 `pdkv_Top`으로 합친다. 지금 칩은 패드 링 + 제어 블록 + 직결 기준 소자(L-split, MOS-C, PNP 2개, 히터) + Kelvin 소자 어레이로 된 제출 가능판이고, CBCM·RO는 비워 둔 자리에 차례로 더한다.
+PDK 모델 검증용 온칩 특성화 IC의 최상위 조립이다. 킷의 칩 조립 방식(FIR_PE MPW240925002, pong_pt1 MPW2025 STD-II)처럼 패드 링(`pdkv_Pad`)과 코어를 따로 만들어 최상위 `pdkv_Top`으로 합친다. 지금 칩은 패드 링 + 제어 블록 + 직결 기준 소자(L-split, MOS-C, PNP 2개, 히터) + Kelvin 소자 어레이 + CBCM 블록으로 된 제출 가능판이고, RO 뱅크는 비워 둔 자리에 더한다.
 
 ```
 pins.csv          28개 패드: 패드 위치(W1–W7 아래→위, N1–N7 왼→오, E1–E7 아래→위, S1–S7 왼→오), 핀, 셀, 포트, 기능, 범위
@@ -8,7 +8,7 @@ pad_ring.py       킷 28핀 GPIO 템플릿 → build/pdkv_Pad.mag, build/pad_pin
 run_pad_ring.sh   패드 링 생성 → Magic GDS(lambda=0.30(ETRI-G)) → 공식 규칙 KLayout DRC, 킷 템플릿 링과 비교
 assemble.py       블록 배치 + 배선 + 칩 경계·실링 → build/pdkv_Top.gds, build/pdkv_seal.gds, build/pdkv_nets.json(검사할 넷과 블록 위치)
 chip_check.py     금속 연결 검사(끊김, 단락, 떠 있는 금속)와 0.01 µm 격자 검사
-run_chip.sh       입력이 없으면 만들고(패드 링, 직결 소자, PDK 셀, 어레이) 조립 → 공식 규칙 덱 → 문서 기준 금속·실링 규칙
+run_chip.sh       입력이 없으면 만들고(패드 링, 직결 소자, PDK 셀, 어레이, CBCM) 조립 → 공식 규칙 덱 → 문서 기준 금속·실링 규칙
                   → 연결 검사 → 안테나(scripts/antenna_rules.py)
 ```
 
@@ -44,6 +44,7 @@ bash designs/etri050/chip/run_chip.sh --rebuild   # 패드 링·직결 소자·P
 |---|---|---|---|
 | 제어 블록 `teg_ctrl_F` | `ctrl/macro/teg_ctrl.gds.gz`(고정 매크로, 아래) | x 537.0–1140.9, y 460.0–761.1 | 스캔 5핀 → S2–S6, vdd 막대 ← W1 PVDD, gnd 막대 ← VSS, 위 변 선택 핀 40개 → 어레이, `ro_in` 6개 → gnd(RO 뱅크를 넣을 때 푼다) |
 | Kelvin 어레이 `karray` | `array/build/karray.gds`(`gen/etri050_array.py`, `../array/README.md`) | 원점 (458.0, 950.0), x 445–781, y 824–1376 | 선택선 40개 ← 제어 블록(채널·버스, 아래), ANW·ADF·ADS·ASF·ASS·AG ← 서쪽 패드 W2–W7, VDD 띠 → W1 VDD 선, VSS 띠 → 남쪽 VSS 선 |
+| CBCM `cbcm` | `cbcm/build/cbcm_full.gds`(`gen/etri050_cbcm.py`, `../cbcm/README.md`) | 원점 (1144.0, 456.0), x 1144.0–1439.8, y 454.2–780.6 | clk·en0–9 ← 제어 블록 오른쪽 변 핀, VCD → E1, VCR → E2(PADR), VDD ← S7 PVDD, VSS → 남쪽·동쪽 VSS 선 |
 | L-split | `direct/build/lsplit.gds` | 활성 영역 왼쪽 아래 (962.9, 1388.0) | force LD1F·LSF·LD2F → N2·N4·N6(PAD), sense → N3·N5·N7(PADR), LG → N1, 기판 탭 → VSS |
 | MOS-C(위아래 뒤집음) | `direct/build/mosc.gds` | x 1214.8–1438.0, y 792.6–1013.7 | 게이트 막대(아래) → CHI(E3), N-well·p+ 막대(위) → CLO(E4) |
 | PNP1 | `direct/build/pnp10.gds` | x 980.0–1029.0, y 1368.0–1417.0(L-split 바로 옆) | E → PE1(E6), B·C → VSS 가지, L-split 기판 탭과 짧은 금속1로 이어짐 |
@@ -58,7 +59,7 @@ bash designs/etri050/chip/run_chip.sh --rebuild   # 패드 링·직결 소자·P
 
 열 묶음: 계획서의 M6(히터 + PNP + 기준 소자: 열저항, 자기 발열 보정)와 PE1 "기준 소자 옆"을 따른다. PNP1은 L-split 바로 옆에 두어 L-split 채널 중심과 PNP1 이미터 중심이 37 µm 떨어진다. 히터는 둘 아래에 가로로 두고, 히터 긴 변에서 L-split 채널과 PNP1 이미터까지가 똑같이 32 µm이고 두 소자 모두 히터 길이(124 µm)의 가운데 쪽에 있어, 히터 전력이 두 소자를 거의 같은 만큼 데운다(히터로 PNP1과 L-split의 열 결합을 맞춰 봄). L-split 고전류 바이어스(5 V × 4.6 mA ≈ 23 mW)가 PNP1 자리에 만드는 온도 상승은 점열원 근사 P/(2πκr)(κ = 150 W/m·K, r = 37 µm)로 약 0.7 K, V_EB로 약 1.4 mV(−2.1 mV/K)라 잴 수 있다. PNP2는 히터에서 약 1 mm 떨어진 남서 모서리에 있다.
 
-빈 자리: 어레이 버스 오른쪽(x 860 이상, y 770–1330, MOS-C 자리 제외)에 RO·CBCM을 넣는다. E1·E2(VCD, VCR)와 S7 PVDD는 이 판에서 코어에 잇지 않는다.
+빈 자리: 어레이 버스 오른쪽(x 860 이상, CBCM 위로 y 790–1330, MOS-C 자리 제외)에 RO 뱅크를 넣는다. CBCM은 제어 블록 오른쪽에 두어 제어 블록의 CBCM 핀(오른쪽 변)과 E1·E2(VCD, VCR), S7 PVDD에 가깝다.
 
 ### 배선 규칙
 
@@ -71,9 +72,9 @@ bash designs/etri050/chip/run_chip.sh --rebuild   # 패드 링·직결 소자·P
 
 ### 전원
 
-- VDD: W1 PVDD 포트 → 금속2 9 µm → 비아1 25개 → 금속1 → 제어 블록 vdd 막대(블록 왼쪽 끝 금속1 9 µm). S7 PVDD는 패드 링 전원 레일로 W1과 이미 이어져 있고, 코어에는 RO·CBCM을 넣을 때 잇는다.
+- VDD: W1 PVDD 포트 → 금속2 9 µm → 비아1 25개 → 금속1 → 제어 블록 vdd 막대(블록 왼쪽 끝 금속1 9 µm). S7 PVDD는 패드 링 전원 레일로 W1과 이어져 있고(패드 링만 뽑아 봐도 한 넷), 금속2 6 µm로 남쪽 VSS 선을 건너 CBCM 블록의 VDD 기둥에 잇는다.
 - VSS: PVSS(E5) 포트에 세 갈래가 따로 붙어 패드에서만 만난다.
-  1. 포트 아래쪽(y 1040–1049) → 비아1 25개 → 금속1 9 µm 선이 동쪽 가장자리(x 1447–1456)를 따라 내려가 남쪽 가장자리(y 446–455, 스캔 채널 아래)를 따라 서쪽 끝까지 간다. 제어 블록 gnd 막대 아래 끝과 PNP2 콜렉터 고리가 여기에 붙는다. 나중 블록(CBCM, 어레이)의 VSS도 이 선에서 받는다.
+  1. 포트 아래쪽(y 1040–1049) → 비아1 25개 → 금속1 9 µm 선이 동쪽 가장자리(x 1447–1456)를 따라 내려가 남쪽 가장자리(y 446–455, 스캔 채널 아래)를 따라 서쪽 끝까지 간다. 제어 블록 gnd 막대 아래 끝과 PNP2 콜렉터 고리가 여기에 붙는다. 어레이와 CBCM의 VSS도 이 선에서 받는다(CBCM은 생성기 줄 gnd 레일이 남쪽 선 위에 놓이고, NAND 두 줄의 gnd 레일 동쪽 끝을 금속1로 동쪽 선에 잇는다).
   2. 포트 가운데(y 1060–1066) → 금속1(x 1434–1438)로 동쪽을 따라 올라가 y 1381–1385로 PNP1 콜렉터 고리(동쪽 변) → 짧은 금속1로 L-split 기판 탭. 온도계와 기준 소자의 접지에 디지털 전류가 흐르지 않게 한다.
   3. 포트 위쪽(y 1114–1123) ← 히터 B(서쪽) 머리의 전용 귀환선(금속2 9 µm). 귀환선은 RO 자리(y 1142 아래)를 피해 y 1150–1159로 동쪽으로 간다.
 - PNP의 베이스(N-well 고리)는 금속1 다리로 콜렉터 고리에 묶어 다이오드 연결로 쓴다(이미터만 패드로).
@@ -92,6 +93,12 @@ bash designs/etri050/chip/run_chip.sh --rebuild   # 패드 링·직결 소자·P
 - 서쪽 패드: AG(W7 PADR) → 금속3(y 1379–1380, 어레이 위) → 금속2로 AG 버스 위 끝. ANW(W2 PADR) → 왼쪽 채널 금속2(x 445.4–446.6)로 올라가 금속3으로 꺾어 PMOS 행 ANW 띠. ADF(W3 PAD) → 금속3 9 µm → 열 스위치 띠의 ADF 버스. ADS(W4 PADR) → 금속3 → ADS 금속3 받침. ASF(W5 PAD) → 금속3 9 µm로 소스 판 왼쪽 가장자리(y 1063–1072). ASS(W6 PADR) → 금속3 → 판 가운데로 가는 sense 선. force 두 핀(ADF, ASF)의 PAD/PADR은 문의 1번 답에 따른다.
 - 전원: 어레이 VDD 띠(금속2, x 449.6–451.7)를 W1 VDD 선(y 535)까지, VSS 띠(금속1, x 446.0–447.8)를 남쪽 VSS 선(y 446)까지 늘인다.
 - 어레이 위로는 AG 선만 지나고, L-split 선(y 1374 이상)은 x 815 오른쪽에 있다.
+
+### CBCM
+
+- clk·en0–9: 제어 블록 오른쪽 변 핀(금속3, x 1136.7–1137.9)과 블록 서쪽 변 핀(x 1144.0–1145.2)은 높이가 0.02 µm 다르다. 금속3 하나로 둘을 덮어 곧게 잇는다. en3·en4는 제어 블록 안 cbcm_en[2] 배선이 핀 바깥(x 1139.7–1140.9, y 684.9–698.1)으로 꺾어 올라가 있어, 핀마다 비아2를 두고 금속2로 그 아래를 건넌다(곧게 그은 첫 판은 연결 검사에서 EN2–EN4 단락으로 잡혔다).
+- VCD: 블록 아래 띠의 VCD 레일(금속3)을 VCR 기둥(금속2) 위로 블록 밖까지 늘이고, 블록과 동쪽 VSS 선 사이(x 1442–1444)에서 금속2로 내려가 y 519–521로 E1 PADR에 들어간다. VCR: VCR 기둥의 포트 높이(y 649.4–651.4)에서 금속2로 E2 PADR까지 곧게. 둘 다 µA 평균이라 PADR 포트를 쓰고, 같은 PANA의 PAD 포트(E1 y 538.8–586.0, E2 y 673.8–721.0)와는 14 µm 이상 떨어진다(VCD 세로 금속2와 E1 PAD 포트 사이 x 14 µm).
+- 블록 위 변(y 780.6)과 MOS-C의 CHI 가지(금속1·2, y 783 이상)는 2.4 µm 떨어진다.
 
 ### 칩 경계·실링
 
@@ -137,4 +144,4 @@ bash designs/etri050/chip/run_chip.sh --rebuild   # 패드 링·직결 소자·P
 
 ## 다음 단계
 
-ETRI 답(force 포트, 본딩도, 리포트 형식, 전류 밀도)을 반영하고, 비워 둔 자리(어레이 버스 오른쪽)에 CBCM·RO·FO4를 더한다. Kelvin 어레이는 NMOS·PMOS 행을 모두 넣었다(`../array/README.md`). 단계마다 `run_chip.sh`로 칩 전체 검사를 다시 통과시킨다.
+ETRI 답(force 포트, 본딩도, 리포트 형식, 전류 밀도)을 반영하고, 비워 둔 자리(어레이 버스 오른쪽, CBCM 위)에 RO 뱅크(FO4 포함)를 더한다. CBCM은 넣었다(`../cbcm/README.md`). Kelvin 어레이는 NMOS·PMOS 행을 모두 넣었다(`../array/README.md`). 단계마다 `run_chip.sh`로 칩 전체 검사를 다시 통과시킨다.

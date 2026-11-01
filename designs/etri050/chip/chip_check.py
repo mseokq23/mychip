@@ -8,7 +8,7 @@ its terminals and the result says what the metal alone connects.
 
   1. every probe point of a net lies on one extracted net (opens);
   2. the metal nets of each block alone (pad ring, seal ring, control block, L-split, MOS-C, PNPs, heater,
-     Kelvin array) are extracted too, and one point of each is probed in the chip: a chip net that holds
+     Kelvin array, CBCM block) are extracted too, and one point of each is probed in the chip: a chip net that holds
      block nets must hold exactly the block nets that one intended net was drawn to join, i.e. the block
      nets under that net's probe points (shorts between nets, between two nets of one block, or into a
      block net no probe declares, such as a node inside the array);
