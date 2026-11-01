@@ -95,7 +95,8 @@ klayout-etri designs/etri050/teg/build/chip/teg_chip_v0.gds      # noVNC 데스�
 - `designs/etri050/ctrl/`: 제어 블록 `teg_ctrl`(20비트 스캔, 섀도 레지스터, 블록 디코더, RO 선택·÷256). `make sim synth gatesim`으로 RTL·합성·게이트 수준 검사, `make flow`로 qflow 배치·배선(킷 FIR_PE 흐름).
 - `designs/etri050/sim/blocks/`: 어레이 경로, 스위치 TG, CBCM, RO 뱅크, 스캔·분주, PNP 온도계, L-split의 ngspice 검사. `python3 run_all.py`가 설계 계획의 수치와 비교한다. 공식 PDK 모델은 킷 문서 폴더의 압축본에서 꺼내므로 `ETRI050_WITH_DOCS=1 bash scripts/setup-etri050.sh`가 한 번 필요하다.
 - `designs/etri050/direct/`: 직결 기준 소자. L-split·MOS-C는 Magic으로 그리고(`gen/etri050_direct.py`, LVS 포함), PNP(pnp10)와 poly2 히터는 PDK 층 GDS로 만든다(`run_pdk_cells.sh`).
-- `designs/etri050/chip/`: 28핀 패드 링(`run_pad_ring.sh`)과 칩 조립(`run_chip.sh` → `build/pdkv_Top.gds`, 칩 경계 1.9 × 1.9 mm와 규칙 문서 4.21 실링 포함). 조립 뒤 칩 전체에 공식 규칙 덱, 규칙 문서 값의 금속·비아·실링 검사, 금속 연결 검사(끊김·단락·떠 있는 금속·0.01 µm 격자)를 한다.
+- `designs/etri050/array/`: Kelvin 소자 어레이 12행(NMOS 8, PMOS 4) × 8열(기하 7종 + open 열). `gen/etri050_array.py`로 그리고 LVS까지 맞추며, `kelvin_r.py`가 그린 어레이에서 Kelvin 루프 안에 남는 저항을 셀마다 뽑는다(측정 보정 표 `kelvin_r.csv`).
+- `designs/etri050/chip/`: 28핀 패드 링(`run_pad_ring.sh`)과 칩 조립(`run_chip.sh` → `build/pdkv_Top.gds`, 칩 경계 1.9 × 1.9 mm와 규칙 문서 4.21 실링 포함). 조립 뒤 칩 전체에 공식 규칙 덱, 규칙 문서 값의 금속·비아·실링 검사, 금속 연결 검사(끊김·단락·떠 있는 금속·0.01 µm 격자), 규칙 문서의 안테나 검사(`scripts/antenna_rules.py`)를 한다.
 
 ### 마이칩 제출 조건 (ETRI 소개 자료, 2026-06 기준)
 

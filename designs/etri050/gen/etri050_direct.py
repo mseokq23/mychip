@@ -166,9 +166,10 @@ def main(argv=None) -> int:
         cell, sch = CELLS[name]()
         for ext in (".mag", ".ext", ".spice", ".gds"):
             (args.out / f"{name}{ext}").unlink(missing_ok=True)
-        run_magic(cell.magic_tcl(), args.out, f"{name}_build.log")
-        if not (args.out / f"{name}.mag").exists():
-            sys.exit(f"Magic did not write {name}.mag (see {args.out / (name + '_build.log')})")
+        run_magic(cell.magic_tcl() + f"cif ostyle lambda=0.30(ETRI)\ngds write {name}.gds\n",
+                  args.out, f"{name}_build.log")
+        if not (args.out / f"{name}.gds").exists():
+            sys.exit(f"Magic did not write {name}.gds (see {args.out / (name + '_build.log')})")
         (args.out / "sch" / f"{name}.spice").write_text(sch)
         x0, y0, x1, y1 = cell.bbox()
         print(f"{name}: {(x1 - x0) * LAMBDA_UM:.1f} x {(y1 - y0) * LAMBDA_UM:.1f} um, "

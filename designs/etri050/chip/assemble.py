@@ -7,6 +7,7 @@ ring keeps its own die coordinates, 97.5-1802.5 um):
   teg_ctrl_F    designs/etri050/ctrl/macro/teg_ctrl.gds.gz    (qflow block, notch-filled, 0.01 um grid)
   lsplit, mosc  designs/etri050/direct/build/*.gds            (etri050_direct.py, Magic style ETRI)
   pnp10, heater designs/etri050/direct/build/*.gds            (run_pdk_cells.sh)
+  karray        designs/etri050/array/build/karray.gds        (etri050_array.py, Magic style ETRI)
 
 The routes drawn here follow the rule document v1.1, not only the kit deck: VIA1/VIA2 exactly
 0.8 x 0.8 um and 0.8 um apart with 0.6 um of metal around, no via1 on a contact and no via2 on a
@@ -40,6 +41,8 @@ usage: klayout -b -r designs/etri050/chip/assemble.py -rd repo=<repo root> [-rd 
 """
 import json
 import os
+import re
+
 import pya
 
 REPO = globals().get('repo') or os.getcwd()
@@ -53,7 +56,9 @@ SRC = {
     'pnp10': os.path.join(DIRECT, 'pnp10.gds'),
     'heater': os.path.join(DIRECT, 'heater.gds'),
     'seal': os.path.join(OUT, 'pdkv_seal.gds'),
+    'karray': globals().get('array') or os.path.join(REPO, 'designs/etri050/array/build/karray.gds'),
 }
+ARRPINS = os.path.join(os.path.dirname(SRC['karray']), 'karray_pins.json')
 SEAL = str(globals().get('seal', '1')) != '0'
 PINFILE = os.path.join(REPO, 'designs/etri050/ctrl/macro/teg_ctrl_pins.txt')
 PADFILE = os.path.join(os.path.dirname(SRC['pad']), 'pad_pins.json')
@@ -351,6 +356,192 @@ for net, cx in (('D1', 0.90), ('S', 4.50), ('D2', 8.70)):
     expect(net, f'lsplit {net} contact strip', 'm1', X0 + cx, Y0 + 5.00)
 expect('LG', 'lsplit gate metal', 'm1', X0 - 2.10, Y0 + 14.00)
 expect('VSS', 'lsplit substrate tap', 'm1', X0 + 4.50, Y0 - 5.70)
+
+# ---- Kelvin array (designs/etri050/gen/etri050_array.py) ----------------------------------------------
+# Block origin = row 0 bottom, left edge of the leftmost column. West of the control block's column
+# select pins and right of the west pads (ANW, ADF, ADS, ASF, ASS, AG); its bottom leaves a 64 um
+# channel above the control block for the 40 select lines, its top (1376.0) stays under the AG line.
+ARR = (458.00, 950.00)
+arr_at = place('karray', *ARR, name='karray')
+apins = json.load(open(ARRPINS))['pins']
+
+
+def apin(name):
+    x0, y0, x1, y1 = apins[name]['box']
+    return round(ARR[0] + x0, 3), round(ARR[1] + y0, 3), round(ARR[0] + x1, 3), round(ARR[1] + y1, 3)
+
+
+def pin_cx(name):
+    x1, _, x2, _ = pin_die(name)
+    return round((x1 + x2) / 2, 2)
+
+
+ARR_X1 = apin('row_line0')[2]                      # right edge of the block (row driver side)
+ARR_Y0 = apin('col_sel0')[1]                       # bottom edge (column select ports)
+CTRL_TOP = pin_die('col_sel[0]')[3]                # top edge of the control block pins
+
+
+def channel(nets, y0, pitch, ymax):
+    """Track per net (metal3) in the channel above the control block; metal2 stubs down to the pins
+    and up to the array. nets: [(name, x_bottom, x_top)]. A net whose bottom stub would run into
+    another net's top stub (same x) must take the lower track (vertical constraint)."""
+    pad, gap = 1.0, 1.0
+    iv = {n: (min(xb, xt) - pad, max(xb, xt) + pad) for n, xb, xt in nets}
+    below = {n: set() for n, _, _ in nets}
+    for a, xba, _ in nets:
+        for b, _, xtb in nets:
+            if a != b and abs(xba - xtb) < 2 * pad + 0.6 + gap:
+                below[b].add(a)                    # a's track below b's
+    left, tracks = {n for n, _, _ in nets}, {}
+    t = 0
+    while left:
+        last, placed = None, []
+        for n in sorted(left, key=lambda n: iv[n][0]):
+            if below[n] & left:
+                continue
+            if last is None or iv[n][0] >= last + gap:
+                placed.append(n)
+                last = iv[n][1]
+        if not placed:
+            raise RuntimeError('channel: cyclic vertical constraints')
+        for n in placed:
+            tracks[n] = round(y0 + t * pitch, 2)
+        left -= set(placed)
+        t += 1
+    if max(tracks.values()) + pad + gap > ymax:
+        raise RuntimeError(f'channel: {t} tracks do not fit under y {ymax}')
+    return tracks, t
+
+
+# select nets: column switches (ports at the array bottom) and row drivers (a bus of metal2 lines right of
+# the array, one per net, in the order of the control block pins so that the channel stays narrow)
+def ctrl_name(n):
+    """row_selb3 -> row_selb[3] (control block pin name)."""
+    m = re.fullmatch(r'(col_selb|col_sel|row_selb|row_sel)(\d+)', n)
+    return f'{m.group(1)}[{m.group(2)}]'
+
+
+row_nets = sorted([f'row_sel{r}' for r in range(12)] + [f'row_selb{r}' for r in range(12)],
+                  key=lambda n: pin_cx(ctrl_name(n)))
+BUS_X0, BUS_PITCH = round(ARR_X1 + 3.20, 2), 3.00
+bus_x = {n: round(BUS_X0 + i * BUS_PITCH, 2) for i, n in enumerate(row_nets)}
+
+
+nets_ch = []
+for c in range(8):
+    for k in ('col_sel', 'col_selb'):
+        x0, _, x1, _ = apin(f'{k}{c}')
+        nets_ch.append((f'{k}{c}', pin_cx(ctrl_name(f'{k}{c}')), round((x0 + x1) / 2, 2)))
+for n in row_nets:
+    nets_ch.append((n, pin_cx(ctrl_name(n)), bus_x[n]))
+tracks, n_tracks = channel(nets_ch, round(CTRL_TOP + 2.55, 2), 3.00, ARR_Y0)
+row_y = {r: apin(f'row_line{r}')[1] - 3.00 for r in range(12)}       # row bottom (sel line at +3.0)
+for n, xb, xt in nets_ch:
+    ty = tracks[n]
+    _, pby0, _, _ = pin_die(ctrl_name(n))
+    rect('m2', xb - 0.60, pby0, xb + 0.60, ty + 1.00)                   # up from the control block pin
+    if abs(xb - xt) < 1.60:      # two cuts would be closer than 0.8 um (VIA2.S1): one cut, pads over both
+        vias(2, min(xb, xt) - 1.00, ty - 1.00, max(xb, xt) + 1.00, ty + 1.00)
+    else:
+        via(2, xb, ty)
+        rect('m3', min(xb, xt) - 1.00, ty - 0.60, max(xb, xt) + 1.00, ty + 0.60)
+        via(2, xt, ty)
+    if n.startswith('col'):
+        rect('m2', xt - 0.60, ty - 1.00, xt + 0.60, ARR_Y0 + 1.20)       # up into the column switch line
+        expect(n.upper(), 'array port', 'm2', xt, ARR_Y0 + 0.60)
+    else:
+        r = int(re.search(r'\d+$', n).group())
+        yl = row_y[r] + (5.40 if n.startswith('row_selb') else 3.00)
+        rect('m2', xt - 0.60, ty - 1.00, xt + 0.60, yl + 1.60)           # bus line up to its row
+        via(1, xt, round(yl + 0.60, 2))
+        rect('m1', ARR_X1 - 0.60, yl, xt + 1.00, yl + 1.20)              # row line extended to the bus
+        expect(n.upper(), 'array row line', 'm1', ARR_X1 - 0.30, yl + 0.60)
+    expect(n.upper(), 'ctrl pin', 'm2', xb, pby0 + 0.40)
+    expect(n.upper(), 'channel track', 'm3', (xb + xt) / 2, ty)
+
+# AG: W7 PADR -> metal3 above the array -> down to the AG bus at the driver column
+xp1, yp0, xp2, yp1 = pads['W7:AG']
+ag_y = round((yp0 + yp1) / 2, 2)
+ax0, _, ax1, ay1 = apin('AG')
+ag_x = round((ax0 + ax1) / 2, 2)
+rect('m2', xp1, ag_y - 1.00, xp2 + 2.00, ag_y + 1.00)
+via(2, xp2 + 1.00, ag_y)
+rect('m3', xp2, ag_y - 0.60, ag_x + 1.00, ag_y + 0.60)
+via(2, ag_x, ag_y)
+rect('m2', ag_x - 0.60, ay1 - 1.20, ag_x + 0.60, ag_y)
+port_probe('AG', 'W7:AG')
+expect('AG', 'array AG bus', 'm2', ag_x, ay1 - 0.60)
+
+# left channel (x 442-446): pad ports turn to metal3 at once; ANW runs up in metal2 at x 445.4-446.6
+X_ANW_V = (445.40, 446.60)
+
+
+def pad_to_m3(key, y_lo, y_hi):
+    """Metal2 stub out of a west pad port and via2 cuts onto metal3, y_lo..y_hi (>= 2 um)."""
+    xp1, _, xp2, _ = pads[key]
+    rect('m2', xp1, y_lo, xp2 + 2.00, y_hi)
+    vias(2, xp2, y_lo, xp2 + 2.00, y_hi)
+
+
+# ANW: W2 PADR -> metal2 up the left channel -> metal3 over the VDD strap -> ANW strap of the PMOS rows
+xp1, yp0, xp2, yp1 = pads['W2:ANW']
+anw_y = round((yp0 + yp1) / 2, 2)
+nx0, ny0, nx1, _ = apin('ANW_BOT')
+anw_j = round(ny0 + 3.00, 2)
+rect('m2', xp1, anw_y - 1.00, X_ANW_V[1], anw_y + 1.00)
+rect('m2', X_ANW_V[0], anw_y - 1.00, X_ANW_V[1], anw_j + 1.00)
+via(2, round((X_ANW_V[0] + X_ANW_V[1]) / 2, 2), anw_j)
+rect('m3', X_ANW_V[0] - 0.40, anw_j - 0.60, (nx0 + nx1) / 2 + 1.00, anw_j + 0.60)
+via(2, round((nx0 + nx1) / 2, 2), anw_j)
+port_probe('ANW', 'W2:ANW')
+expect('ANW', 'array ANW strap', 'm2', (nx0 + nx1) / 2, ny0 + 10.00)
+
+# ADF: W3 PAD -> 9 um metal3 up to the array's ADF bus (left end)
+fx0, fy0, fx1, fy1 = apin('ADF')
+xp1, yp0, xp2, yp1 = pads['W3:ADF']
+pad_to_m3('W3:ADF', yp1 - 12.00, yp1 - 3.00)
+rect('m3', xp2, yp1 - 12.00, fx0 + 5.00, yp1 - 3.00)
+rect('m3', fx0 - 4.00, yp1 - 12.00, fx0 + 5.00, fy1)
+port_probe('ADF', 'W3:ADF')
+expect('ADF', 'array ADF bus', 'm3', fx0 + 2.00, (fy0 + fy1) / 2)
+
+# ADS: W4 PADR -> metal3 down the left channel -> the array's ADS landing (metal3)
+sx0, sy0, sx1, sy1 = apin('ADS_M3')
+xp1, yp0, xp2, yp1 = pads['W4:ADS']
+ads_y = round((yp0 + yp1) / 2, 2)
+pad_to_m3('W4:ADS', ads_y - 1.00, ads_y + 1.00)
+rect('m3', xp2, sy0, xp2 + 1.20, ads_y + 1.00)
+rect('m3', xp2, sy0, sx1, sy1)
+port_probe('ADS', 'W4:ADS')
+expect('ADS', 'array ADS line', 'm1', apin('ADS')[0] + 0.60, apin('ADS')[1] + 0.60)
+
+# ASF: W5 PAD -> 9 um metal3 straight into the source plate's left edge
+ex0, ey0, ex1, ey1 = apin('SRC_EDGE')
+xp1, yp0, xp2, yp1 = pads['W5:ASF']
+asf_y = round((yp0 + yp1) / 2, 2)
+pad_to_m3('W5:ASF', asf_y - 4.50, asf_y + 4.50)
+rect('m3', xp2, asf_y - 4.50, ex1, asf_y + 4.50)
+port_probe('SRC', 'W5:ASF')
+expect('SRC', 'array source plate', 'm3', ex0 + 20.00, ey0 + 60.00)
+
+# ASS: W6 PADR -> metal3 down the left channel -> the plate's sense line (slot to the plate centre)
+tx0, ty0, tx1, ty1 = apin('ASS')
+xp1, yp0, xp2, yp1 = pads['W6:ASS']
+ass_y = round((yp0 + yp1) / 2, 2)
+pad_to_m3('W6:ASS', ass_y - 1.00, ass_y + 1.00)
+rect('m3', xp2, ty0, xp2 + 1.20, ass_y + 1.00)
+rect('m3', xp2, ty0, tx1, ty1)
+port_probe('SRC', 'W6:ASS')
+
+# VDD and VSS of the array: straps extended down to the W1 VDD line and the south VSS line
+vx0, vy0, vx1, _ = apin('VDD')
+rect('m2', vx0, 535.00, vx1, vy0 + 1.20)
+expect('VDD', 'array VDD strap', 'm2', (vx0 + vx1) / 2, vy0 + 5.00)
+gx0, gy0, gx1, _ = apin('VSS')
+rect('m1', gx0, 446.00, gx1, gy0 + 1.20)
+rect('m1', gx0, 446.00, 456.00, 455.00)
+expect('VSS', 'array VSS strap', 'm1', (gx0 + gx1) / 2, gy0 + 5.00)
+print(f'array channel: {n_tracks} tracks, row bus x {min(bus_x.values())}-{max(bus_x.values())}')
 
 # ---- seal ring: its three metals are one piece through its via lines and join no other net --------
 if SEAL:

@@ -19,6 +19,7 @@ ETRI050_WITH_DOCS=1 bash scripts/setup-etri050.sh        # docs/ETRI_0p5um_NSPL_
 cd designs/etri050/sim/blocks
 python3 run_all.py              # 전부
 python3 run_all.py tg pnp       # 일부만
+python3 run_all.py post         # 레이아웃 뒤 어레이(designs/etri050/array/build/kelvin_r.json이 있을 때 기본 실행에도 들어감)
 ```
 
 실행 시간(Codespace 4코어, ngspice-47, 2026-11-01): 전체 약 10분 — RO 384 s(과도 해석 38회), CBCM 128 s(23회), scan 58 s(스캔 6회 + 분주 9회), 나머지는 각각 10 s 이내. 이때 결과는 `BLOCK CHECKS: 23 ok, 0 to check`였다(킷 db09a3d, 111dc09와 문서 PDF 두 개만 다름).
@@ -30,10 +31,11 @@ python3 run_all.py tg pnp       # 일부만
 | tg_ron.py | 어레이 스위치 TG의 0.05–4.95 V 최대 Ron | N100/P250: 45 Ω(TT 27 °C), 62 Ω(SS 125 °C) |
 | array_path.py | 8×8 NMOS 어레이 경로(PANA 다이오드, 미선택 행·열, Kelvin SMU) 대 이상 소자 | 문턱 이상 전류 오차 ≤ 0.04%, 27 °C ΔVt ≤ 0.012 mV, 125 °C 누설 1.2–5.5 nA, open 채널 차감 후 ΔVt ≤ 0.06 mV |
 | array_kelvin.py | 드레인 sense를 열 끝에서 받을 때와 셀마다 받을 때(행 선택 TG) 비교, 먼 행·MET2 열 선로 | 셀 sense: R_tot 오차 ≤ 0.01%. 열 끝 sense: +1.1%(선로 10 µm)·+1.8%(6 µm) |
+| array_post.py | 레이아웃 뒤: array_path 하네스에 셀 sense TG, 그린 스위치 크기, 그린 어레이에서 뽑은 Kelvin 루프 안 저항(`designs/etri050/array/kelvin_r.py`) | W/L 9/0.6 R_tot +0.16 %(typ)·+0.24 %(최대), typ 표를 빼면 ≤ 0.08 %, 다른 셀 ≤ 0.03 %. ΔVt 27 °C ≤ 0.004 mV, 125 °C open 뺀 뒤 ≤ 0.047 mV |
 | cbcm.py | CBCM 정확도·주파수·PADR 영향·125 °C·C–V | 300 fF +1.2%, 1 pF +0.3%, PADR 영향 ≤ 0.3%p |
 | ro_bank.py | 31단 RO 6종 × 5코너(27 °C) + TT 125 °C, INV RO의 VDD 4.5–5.5 V | INV 123.1, NAND 93.8, NOR 66.8, FO4 52.8, 배선 65.0, 저항 69.1 MHz(TT 27 °C) |
 | scan_divider.py | 8비트 스캔 + 섀도 + 3→8 디코더(3 PVT × 1·10 MHz), 분주기 ÷16(100–200 MHz) | 모두 정상 |
 | pnp_thermo.py | pnp10 온도계(PADR 경유) 3전류법 대 2전류법 | 3전류법 오차 ≤ +0.16 K(27–125 °C), 2전류법 −4.9 K(125 °C) |
 | lsplit.py | W 9 µm 포화 전류, Terada–Muta(L 0.6·1.2·3·9 µm) | 4.56 mA, R_sd 121 Ω(27 °C)·135 Ω(125 °C) |
 
-PANA ESD 다이오드는 킷 GPIO GDS(ETRI_NSPL_GPIO_250610)에서 읽은 크기(극성마다 10 × 10 µm 12개, 면적 1200 µm²·둘레 480 µm)로 넣었다. 배선 저항·기생 용량은 추정값이므로 레이아웃 추출 뒤 다시 돌린다.
+PANA ESD 다이오드는 킷 GPIO GDS(ETRI_NSPL_GPIO_250610)에서 읽은 크기(극성마다 10 × 10 µm 12개, 면적 1200 µm²·둘레 480 µm)로 넣었다. 배선 저항·기생 용량은 추정값이므로 레이아웃 추출 뒤 다시 돌린다. 어레이는 `array_post.py`로 다시 돌렸다: 계획 하네스의 소스 판은 sense 탭에 전류가 흐르지 않아 이상적이었고, 그린 어레이의 소스 비아·판(셀마다 0.42–0.68 Ω, typ)이 W/L 9/0.6 셀에서 +0.16 %로 드러난다(`designs/etri050/array/README.md`).

@@ -7,10 +7,11 @@ extracted on MET1, VIA1, MET2, VIA2 and MET3 only, so a transistor, a diode or a
 its terminals and the result says what the metal alone connects.
 
   1. every probe point of a net lies on one extracted net (opens);
-  2. the metal nets of each block alone (pad ring, seal ring, control block, L-split, MOS-C, PNPs, heater) are
-     extracted too, and one point of each is probed in the chip: a chip net that holds block nets must
-     hold exactly the block nets that one intended net was drawn to join (shorts between nets, between
-     two nets of one block, or into a net nobody intended);
+  2. the metal nets of each block alone (pad ring, seal ring, control block, L-split, MOS-C, PNPs, heater,
+     Kelvin array) are extracted too, and one point of each is probed in the chip: a chip net that holds
+     block nets must hold exactly the block nets that one intended net was drawn to join, i.e. the block
+     nets under that net's probe points (shorts between nets, between two nets of one block, or into a
+     block net no probe declares, such as a node inside the array);
   3. metal the routing added that touches no block is reported (floating pieces);
   4. every vertex of the chip lies on the 0.01 um design grid (rule document 3.3; ETRI's Calibre
      deck checks OFFGRID per layer, the kit KLayout deck does not).
@@ -118,36 +119,48 @@ def main(spec_file):
             bl = pya.Layout()
             bl.read(b['gds'])
             bl2n, bregs = extract(bl, bl.top_cell())
-            cache[b['gds']] = inner_points(bl2n, bregs, bl.dbu)
+            cache[b['gds']] = (bl2n, bregs, inner_points(bl2n, bregs, bl.dbu))
         t = pya.DCplxTrans(1, b['rot'], b['mirror'], b['x'], b['y'])
         lost = 0
-        for nid, layer, x, y in cache[b['gds']]:
+        for nid, layer, x, y in cache[b['gds']][2]:
             p = t * pya.DPoint(x, y)
             cid = probe(l2n, regs, layer, p.x, p.y)
             if cid is None:
                 lost += 1
                 continue
             members.setdefault(cid, []).append((b['name'], nid))
-        print(f"  block {b['name']}: {len(cache[b['gds']])} metal nets probed" + (f", {lost} not found" if lost else ''))
+        print(f"  block {b['name']}: {len(cache[b['gds']][2])} metal nets probed" + (f", {lost} not found" if lost else ''))
         bad += lost
-    for net, ids in probe_net_of.items():
-        cid = next(iter(ids))
-        expected_members[net] = set(members.get(cid, []))
+    # the block nets each intended net was drawn to join: the ones under its probe points
+    for net, probes in spec['nets'].items():
+        drawn = set()
+        for p in probes:
+            for b in spec['blocks']:
+                bl2n, bregs, _ = cache[b['gds']]
+                q = pya.DCplxTrans(1, b['rot'], b['mirror'], b['x'], b['y']).inverted() * pya.DPoint(p['x'], p['y'])
+                nid = probe(bl2n, bregs, p['layer'], q.x, q.y)
+                if nid is not None:
+                    drawn.add((b['name'], nid))
+        expected_members[net] = drawn
     owner = {}
     for net, mem in expected_members.items():
         for m in mem:
             owner[m] = net
     shorts = 0
     for cid, mem in members.items():
-        if len(mem) < 2:
+        intended = [n for n in spec['nets'] if probe_net_of[n] == {cid}]
+        if len(mem) < 2 and not intended:
             continue
         nets_here = {owner.get(m) for m in mem}
-        intended = [n for n in spec['nets'] if probe_net_of[n] == {cid}]
-        if len(intended) != 1 or nets_here != {intended[0]}:
+        if len(intended) != 1 or nets_here != {intended[0]} or set(mem) != expected_members[intended[0]]:
             shorts += 1
-            names = sorted(f'{blk}:{nid}' for blk, nid in mem)
-            print(f"  SHORT on chip net {cid}: {len(mem)} block nets {names[:8]}{' ...' if len(names) > 8 else ''}"
-                  f" (intended net: {intended or 'none'})")
+            if len(intended) == 1:       # one intended net: name the block nets its probes do not account for
+                what, shown = 'not drawn to be joined', set(mem) - expected_members[intended[0]]
+            else:
+                what, shown = 'block nets', set(mem)
+            names = sorted(f'{blk}:{nid}' for blk, nid in shown)
+            print(f"  SHORT on chip net {cid}: {len(mem)} block nets, {what}: "
+                  f"{names[:8]}{' ...' if len(names) > 8 else ''} (intended net: {intended or 'none'})")
     bad += shorts
 
     # 3. floating route metal (chip nets without any block net)

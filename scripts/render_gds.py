@@ -2,10 +2,11 @@
 
 usage:
   klayout -b -r scripts/render_gds.py -rd gds=<in.gds> -rd png=<out.png> \
-      [-rd lyp=<layer properties .lyp>] [-rd width=1600] [-rd box=x1,y1,x2,y2]
+      [-rd lyp=<layer properties .lyp>] [-rd width=1600] [-rd box=x1,y1,x2,y2] [-rd hide=36,35]
 
 box is a window in microns (default: the whole top cell). The height follows the window's
-aspect ratio. All hierarchy levels are drawn; labels and the grid are hidden.
+aspect ratio. All hierarchy levels are drawn; labels and the grid are hidden. hide lists GDS
+layer numbers not to draw (for example the array's MET3 source plate, 36, to see the cells).
 """
 import pya
 
@@ -14,6 +15,7 @@ png = globals().get('png')
 lyp = globals().get('lyp')
 width = int(globals().get('width') or 1600)
 win = globals().get('box')
+hide = {int(v) for v in (globals().get('hide') or '').split(',') if v.strip()}
 if not gds or not png:
     raise RuntimeError(__doc__)
 
@@ -22,6 +24,14 @@ view.load_layout(gds, True)
 if lyp:
     view.load_layer_props(lyp)
 view.max_hier()
+if hide:
+    it = view.begin_layers()
+    while not it.at_end():
+        lp = it.current()
+        if lp.source_layer in hide:
+            lp.visible = False
+            view.set_layer_properties(it, lp)
+        it.next()
 view.set_config('background-color', '#000000')
 view.set_config('grid-visible', 'false')
 view.set_config('text-visible', 'false')
