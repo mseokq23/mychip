@@ -51,7 +51,7 @@ def probe(l2n, regs, layer, x, y):
 
 def inner_points(l2n, regs, dbu):
     """One point inside the metal of every net of a block (the vertex mean of a convex piece)."""
-    circuit = l2n.netlist().top_circuit()
+    circuit = next(l2n.netlist().each_circuit_top_down())
     out = []
     for net in circuit.each_net():
         for name in ('m1', 'm2', 'm3'):
@@ -164,7 +164,7 @@ def main(spec_file):
     bad += shorts
 
     # 3. floating route metal (chip nets without any block net)
-    floating = [n for n in l2n.netlist().top_circuit().each_net() if n.cluster_id not in members]
+    floating = [n for n in next(l2n.netlist().each_circuit_top_down()).each_net() if n.cluster_id not in members]
     flo = 0
     for n in floating:
         area = sum(l2n.shapes_of_net(n, regs[k], True).area() for k in ('m1', 'm2', 'm3'))
