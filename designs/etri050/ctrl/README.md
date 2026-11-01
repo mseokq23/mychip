@@ -57,6 +57,10 @@ make qflowsim  # qflow가 합성한 넷리스트(배치·배선에 들어간 것
 
 ### 결과 (2026-11-01, Codespace, 킷 db09a3d)
 
+![teg_ctrl 배치·배선 결과: 8행 표준셀과 금속2·3 배선, 604 × 301 µm](../../../docs/img/teg_ctrl_layout.png)
+
+그림은 홈을 메운 평탄화 GDS를 `klayout -b -r scripts/render_gds.py -rd gds=build/qflow/layout/teg_ctrl_F_fill.gds -rd png=<그림> -rd lyp=$ETRI050_LYP`로 그린 것이다. 확대 그림 `docs/img/teg_ctrl_detail.png`는 `-rd box=250,100,350,160`(µm) 구간이다.
+
 도구: 킷 qflow 1.4.100, graywolf 0.1.6-4-gf47937b(자체 테스트 6개 중 5개 통과 — 전체 배치 흐름 시험 2개와 TimberWolfSC 시험은 기대 파일과 바이트 단위로 같고, 실패 1개는 TimberWolfMC 단독 시험에서 패드 위치가 기대 파일과 다름), qrouter 1.4.88, Yosys 0.70, Magic 8.3.685, Icarus Verilog 14.0. 한 번 실행에 약 22 s(홈 메우기와 두 번째 KLayout 검사 포함).
 
 | 항목 | 결과 |
