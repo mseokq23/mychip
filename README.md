@@ -88,6 +88,13 @@ klayout-etri designs/etri050/teg/build/chip/teg_chip_v0.gds      # noVNC 데스�
   - 공유 소스와 드레인의 배선 저항이 측정에 들어간다. 패드 표의 square 수에 PDK의 metal 시트 저항을 곱해 보정한다.
   - 안테나 규칙은 오픈소스 덱에 없다. 공식 Calibre 덱이나 운영 측 검증으로 확인한다.
 
+### 온칩 특성화 IC 블록 (진행 중)
+
+통합 TEG를 스캔 제어 + Kelvin 어레이 + CBCM + RO 뱅크 + 직결 기준 소자로 묶는 칩의 블록 검증 자료다.
+
+- `designs/etri050/ctrl/`: 제어 블록 `teg_ctrl`(20비트 스캔, 섀도 레지스터, 블록 디코더, RO 선택·÷256). `make sim synth gatesim`으로 RTL·합성·게이트 수준 검사, `make flow`로 qflow 배치·배선(킷 FIR_PE 흐름).
+- `designs/etri050/sim/blocks/`: 어레이 경로, 스위치 TG, CBCM, RO 뱅크, 스캔·분주, PNP 온도계, L-split의 ngspice 검사. `python3 run_all.py`가 설계 계획의 수치와 비교한다. 공식 PDK 모델은 킷 문서 폴더의 압축본에서 꺼내므로 `ETRI050_WITH_DOCS=1 bash scripts/setup-etri050.sh`가 한 번 필요하다.
+
 ### 마이칩 제출 조건 (ETRI 소개 자료, 2026-06 기준)
 
 - 칩 1.9 × 1.9 mm, 팀당 설계 면적 1.5 × 1.5 mm (GPIO를 쓰면 1.0 × 1.0 mm). 패키지를 하지 않으면 패드를 자유롭게 배치할 수 있다.
@@ -107,7 +114,7 @@ klayout-etri designs/etri050/teg/build/chip/teg_chip_v0.gds      # noVNC 데스�
 - KLayout 덱(`etri_05um_generated_final.drc`)에는 poly 엔드캡, 게이트 밖 ACT 길이, ACT 컨택–게이트 간격, NSD/PSD의 ACT 감쌈 같은 규칙이 없다. 그래서 Magic DRC(λ 규칙, 더 보수적)와 함께 돌린다. `etri-check`가 둘 다 한다.
 - ngspice-47(이 이미지)은 `echo` 출력에서 `=` 앞뒤 공백을 지운다. 출력을 파싱할 때 공백이 있다고 가정하지 않는다.
 - 이미지의 기본 PDK는 IHP SG13G2라서 그냥 `klayout`을 열면 SG13G2 메뉴와 technology가 붙는다. ETRI 레이아웃은 `klayout-etri`로 연다(IHP 설정을 빼고 ETRI 레이어 색, 전체 계층 표시로 연다).
-- 이 이미지의 qflow는 변환 도구 용도라, 킷의 ETRI용 디지털 자동 배치배선 흐름은 이 설정에서 다루지 않는다. 이 설정은 풀커스텀 기준이다.
+- 이 이미지의 qflow는 변환 도구 용도로 들어 있다. 킷의 ETRI용 디지털 자동 배치배선은 `designs/etri050/ctrl/run_flow.sh`가 맡는데, graywolf 등 필요한 도구가 이미지에 다 있는지는 아직 확인하지 않았다(없으면 스크립트가 이름을 알려 주고 멈춘다).
 
 ## 3. Tiny Tapeout
 
