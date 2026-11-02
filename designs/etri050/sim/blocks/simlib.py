@@ -73,6 +73,11 @@ def run(net, name):
     r = subprocess.run(['ngspice', '-b', path], cwd=BUILD, capture_output=True, text=True, timeout=3600)
     out = r.stdout + r.stderr
     open(os.path.join(BUILD, name + '.log'), 'w').write(out)
+    return results(out)
+
+
+def results(out):
+    """The 'RES k=v ...' lines of an ngspice output as a dict."""
     res = {}
     for line in out.splitlines():
         if line.startswith('RES '):

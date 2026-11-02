@@ -532,9 +532,11 @@ def compare_settings(netlist):
         dc.equal_parameters = eq
 
 
-def lvs(gds: Path, lvsdb: Path = None, spice: Path = None, named=False):
+def lvs(gds: Path, lvsdb: Path = None, spice: Path = None, named=False, keep=False):
     """-> (match, report lines), or with named=True (match, report lines, netlist): the extracted netlist
-    as drawn (parallel devices not combined), its nets named after their reference nets on a match"""
+    as drawn (parallel devices not combined), its nets named after their reference nets on a match.
+    keep=True (with named) adds the extraction itself: {"lv", "L", "ly", "top", "names" (cluster id ->
+    reference net name)}, for wiring capacitance (chip_rc.py)."""
     pins = pad_pins()
     groups = ring_groups(gds, pins)
     ly, top, placement = core_layout(gds)
@@ -634,8 +636,8 @@ def lvs(gds: Path, lvsdb: Path = None, spice: Path = None, named=False):
     if lvsdb:
         lvsdb.parent.mkdir(parents=True, exist_ok=True)
         lv.write(str(lvsdb))
+    name = {}
     if good:                                                  # name the drawn nets after the reference
-        name = {}
         for cp in xref.each_circuit_pair():
             for n in xref.each_net_pair(cp):
                 name[n.first().cluster_id] = n.second().expanded_name()
@@ -647,6 +649,8 @@ def lvs(gds: Path, lvsdb: Path = None, spice: Path = None, named=False):
         w = kdb.NetlistSpiceWriter()
         w.use_net_names = True
         drawn.write(str(spice), w, f"pdkv core extracted from {gds.name} ({'nets named after the reference' if good else 'no match'})")
+    if named and keep:
+        return good, rep, drawn, {"lv": lv, "L": L, "ly": ly, "top": top, "names": name}
     return (good, rep, drawn) if named else (good, rep)
 
 

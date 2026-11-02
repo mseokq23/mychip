@@ -20,7 +20,9 @@ cd designs/etri050/sim/blocks
 python3 run_all.py              # 전부
 python3 run_all.py tg pnp       # 일부만
 python3 run_all.py post         # 레이아웃 뒤 어레이(designs/etri050/array/build/kelvin_r.json이 있을 때 기본 실행에도 들어감)
-python3 run_all.py chip         # 칩 전체 트랜지스터 수준(designs/etri050/chip/build/pdkv_Top.gds가 있을 때 기본 실행에도 들어감)
+python3 run_all.py chip         # 칩 전체 트랜지스터 수준(이름을 줄 때만, designs/etri050/chip/build/pdkv_Top.gds 필요)
+python3 run_all.py timing       # 제어 블록 타이밍, 칩 넷리스트 + 배선 용량(이름을 줄 때만, 같은 GDS 필요)
+python3 run_all.py timing --reuse   # 같은 덱의 지난 실행 기록·파형을 다시 읽어 판정(약 11분)
 ```
 
 실행 시간(Codespace 4코어, ngspice-47, 2026-11-01): 전체 약 10분 — RO 384 s(과도 해석 38회), CBCM 128 s(23회), scan 58 s(스캔 6회 + 분주 9회), 나머지는 각각 10 s 이내. 이때 결과는 `BLOCK CHECKS: 23 ok, 0 to check`였다(킷 db09a3d, 111dc09와 문서 PDF 두 개만 다름). CBCM 블록 두 단계가 더해져 cbcm_block 228 s(54회), cbcm_post 373 s(97회)가 늘었고, 두 단계의 15개는 모두 ok였다(같은 날, 같은 환경). 로컬 ngspice-42(2코어)에서도 같은 값이 나온다. 칩 전체 단계 `chip`(`chip_post.py`)은 이름을 줄 때만 돈다(`python3 run_all.py chip`): 로컬 ngspice-42 2코어에서 42분(2026-11-02, 넷리스트 추출 1분 반 뒤 과도 해석 6개를 두 개씩: 스캔 세 코너 각 약 10분, RO 0 28분, CBCM 24분, RO 3 5분)이고 결과는 `BLOCK CHECKS: 37 ok, 0 to check`였다.
@@ -42,6 +44,7 @@ python3 run_all.py chip         # 칩 전체 트랜지스터 수준(designs/etri
 | pnp_thermo.py | pnp10 온도계(PADR 경유) 3전류법 대 2전류법 | 3전류법 오차 ≤ +0.16 K(27–125 °C), 2전류법 −4.9 K(125 °C) |
 | lsplit.py | W 9 µm 포화 전류, Terada–Muta(L 0.6·1.2·3·9 µm) | 4.56 mA, R_sd 121 Ω(27 °C)·135 Ω(125 °C) |
 | chip_post.py | 칩 전체(패드 링 안)를 트랜지스터 수준으로: `designs/etri050/chip/chip_lvs.py`가 칩 GDS에서 뽑아 기준과 일치시킨 넷리스트(소자만). 스캔 5프레임(모드 01·01·00·10·11)에서 SLE 뒤와 다음 프레임 중간의 선택·enable 선 55개, OUT 읽기 80비트(TT 27 °C 5 V·SS 125 °C 4.5 V·FF 27 °C 5.5 V). 어레이 I(ADF) 대 측정이 가정하는 소자(게이트 AG, 드레인 ADS 전압, 소스 SRC), 선택 행 게이트 − AG, I(AG), mode 00. CBCM 셀 1(PIP)·셀 0과 CBCM_CLK 게이트, enable. RO 0 ÷256과 주파수, RO 3(없음) 정지 | 세 코너 모두 선 틀림 0, 읽기 틀림 0/80. NMOS 2행 0열 1.692 mA 오차 0.0000 %, PMOS 9행 1열 0.320 mA −0.002 %(SS −0.007 %), 게이트 − AG 0 mV, I(AG) ≤ 57 pA, mode 00 ≤ 67 pA(gmin). CBCM 셀 1 465.55 fF = 블록 넷리스트 +0.10 fF(그린 판 460.80 fF), 빈 셀 0.004 fF, CBCM_CLK mode 10에서 창마다 6번·mode 01에서 22 µV. RO 0 133.9 MHz(같은 reltol의 블록 넷리스트 134.2 MHz, −0.2 %), OUT 반주기 × f = 128.00, RO_EN0만 켜짐. RO 3: enable 0, 탭·RO 멀티플렉서·OUT 정지 |
+| chip_timing.py | 제어 블록 타이밍: 칩 넷리스트에 그린 배선 용량(`../../chip/chip_rc.py`, 넷 1372개)과 POB4 입력단을 넣어 스캔(TT 27 °C·SS 125 °C·FF 27 °C, hold용 FF 0 °C·FS·SF): 시프트 race(19쌍)·clk→Q·클록 삽입·skew·SCK → OUT·SDI. 그린 DFFPOSX1 하나의 hold·setup, 배선 저항 상한(규칙 문서 최대값)과 같은 층 결합 어림 2배, RO 0 → 분주기 8단(TT·SS·FF) | hold 여유(race − hold − 저항 상한 99.9 ps − 한 버퍼 결합) ≥ 509 ps(FF 0 °C), 가장 짧은 SCK 주기 1.95 ns(SS 125 °C, 스캔 100 ns), 읽기 ≤ 3.25 ns, 시프트·선·읽기 틀림 0, 분주 단 = 탭 × 2^(k+1)(5 ppm 안) |
 
 PANA ESD 다이오드는 킷 GPIO GDS(ETRI_NSPL_GPIO_250610)에서 읽은 크기(극성마다 10 × 10 µm 12개, 면적 1200 µm²·둘레 480 µm)로 넣었다. 배선 저항·기생 용량은 추정값이므로 레이아웃 추출 뒤 다시 돌린다. 어레이는 `array_post.py`로 다시 돌렸다: 계획 하네스의 소스 판은 sense 탭에 전류가 흐르지 않아 이상적이었고, 그린 어레이의 소스 비아·판(셀마다 0.42–0.68 Ω, typ)이 W/L 9/0.6 셀에서 +0.16 %로 드러난다(`designs/etri050/array/README.md`).
 
@@ -55,4 +58,29 @@ PANA ESD 다이오드는 킷 GPIO GDS(ETRI_NSPL_GPIO_250610)에서 읽은 크기
 - pA 단위 값(mode 00의 I(ADF), I(AG), CBCM 휴지 전하)은 시뮬레이터 gmin(1e-12 S)에서 나온 값이고 실제 누설이 아니다. 이 검사들은 아무것도 선택되지 않았음을 본다.
 - RO 0을 돌릴 때 RO_IN2는 배선 용량이 없어 RO 멀티플렉서 게이트를 거쳐 0.14 V 흔들린다. 정지 판정 한계는 그래서 1 V다(도는 링의 탭은 0–5 V).
 - L-split·히터·PNP는 넣지 않았다. 단자가 모두 패드라 LVS로 소자가 맞으면 트랜지스터 수준 모의가 볼 것이 없다(`lsplit.py`, `pnp_thermo.py`가 그 검사).
-- 한계: 제어 블록의 배선 기생은 어디서도 모의하지 않았다(qflow STA는 서명 항목이 아님). 그래서 세 코너의 스캔은 동작을 보이고 타이밍 여유는 보이지 않는다. CBCM과 RO는 TT 27 °C만 돌린다(코너·온도는 `cbcm_post.py`·`ro_post.py`).
+- 한계: 이 모의에는 배선 기생이 없어 세 코너의 스캔은 동작을 보이고 타이밍 여유는 보이지 않는다. 제어 블록의 타이밍은 배선 용량을 넣은 `chip_timing.py`(아래)가 본다. CBCM과 RO는 TT 27 °C만 돌린다(코너·온도는 `cbcm_post.py`·`ro_post.py`).
+
+## 제어 블록 타이밍 (`chip_timing.py`)
+
+`chip_post.py`는 소자만 돌리므로 제어 블록 배선은 어디서도 모의하지 않았다(qflow `sta`는 킷 liberty 값으로 본 것이라 서명이 아니다). 여기서는 칩 넷리스트(소자 수준 LVS가 일치한 것)의 넷 1372개에 그린 GDS의 배선 용량(`../../chip/chip_rc.py`: 규칙 문서 표 5.5, 34.3 pF, RO 뱅크·CBCM 블록 추출과 0.01 fF까지 같음)을 넣고, OUT에는 0.1 pF 대신 그린 POB4 입력단(`chip_rc.pob4_input`: 인버터 하나와 그 뒤 게이트 3개 0.46 pF)을 단다.
+
+- 스캔: chip_post의 5프레임(10 MHz)을 TT 27 °C 5 V·SS 125 °C 4.5 V·FF 27 °C 5.5 V에서, hold를 보려고 FF 0 °C 5.5 V(추운 실험실)·FS·SF 27 °C 5 V에서도 돌린다. 선·읽기 검사는 chip_post와 같고, 파형(VDD/2 교차, 점 사이 직선)에서 SCK 상승마다 잰다: 시프트 플롭 20개가 비트열대로 바뀌는지(첫 프레임 뒤 1790번, 가장자리 창 밖 변화 0), race = t(sr[i] 변화) − t(sr[i]를 받는 플롭의 클록 상승)(19쌍, 그중 7쌍은 서로 다른 클록 버퍼 `sck_bF$buf0–3`), clk→Q, 버퍼 삽입 지연(버퍼마다)·skew, SCK → OUT 읽기 지연, SDI 변화와 sr[0] 클록 사이.
+- DFFPOSX1 하나: sr[1] 플롭의 그린 소자 22개와 그 안 배선 용량, 칩 안 부하(sr[1] 배선과 받는 플롭 게이트)로 hold·setup을 이분법(1 ps)으로 찾는다. hold는 Q가 VDD의 10 % 안에 머무는 가장 이른 D 변화(음수면 클록 앞), setup은 clk→Q가 8 ns 앞섰을 때보다 10 % 넘게 늘지 않는 가장 짧은 앞섬이다. 클록 램프는 그 코너 스캔에서 본 가장 느린 것, 데이터 램프는 가장 빠른 것과 느린 것(hold는 둘 중 나쁜 쪽, setup은 느린 것)이다. 소스는 10 Ω, VDD는 1 Ω을 거친다: TT의 가장 빠른 Q 램프(0.37 ns)로 D를 바꾸면 이상 VDD에서 ngspice가 램프 시작점에서 "timestep too small"로 멈췄다(1 Ω에서 떨어지는 전압은 1 mV 이하).
+- 배선 저항은 모의하지 않는다: 규칙 문서 5.2·5.3 최대값으로 잡은 클록 넷 저항 상한(`chip_rc.r_bound`) × 넷 전체 용량(배선 + 이웃 결합 어림 + 게이트)이 플롭까지의 Elmore 지연 상한이다(SCK 36.3 ps, 버퍼 넷 58.4–63.6 ps). 버퍼가 다른 쌍은 SCK(버퍼 입력까지)와 받는 버퍼 넷을 함께 겪으므로 둘을 더한 99.9 ps를 쓴다.
+- 같은 층 이웃 결합은 표에 값이 없어 넣지 않고, 평행판 어림(`chip_rc.lateral`, 넷마다 4–8 fF)의 2배를 SCK와 버퍼 넷 넷에 넣은 스캔을 SS·FF에서 따로 돌린다. 이때는 모든 클록이 함께 늦어지므로, 버퍼 하나만 늦어지는 경우는 그 실행에서 버퍼별 삽입 지연이 가장 많이 는 값(SS 11.1 ps, FF 6.3 ps; TT·FS·SF는 큰 쪽)을 hold 여유에서 더 뺀다.
+- RO: RO 0(가장 빠른 INV 링) → 8단 리플 분주기(mode 11, osel 1)를 TT·SS·FF에서 돌려, 1.2 µs 창에서 두 번 이상 도는 단마다 탭의 정확히 ½, ¼, …인지, RO 멀티플렉서가 레일까지 흔드는지 본다.
+
+| 코너 | race 최소–최대 | DFFPOSX1 hold · setup | hold 여유(배선 저항·한 버퍼 결합 뺌) | 가장 짧은 SCK 주기 | SCK → OUT | 클록 삽입 · skew |
+|---|---|---|---|---|---|---|
+| TT 27 °C 5 V | 493–758 ps | −255 · 579 ps | 637 ps | 1.34 ns | 2.26 ns | 635–656 · 16.7 ps |
+| SS 125 °C 4.5 V | 723–1099 ps | −378 · 850 ps | 990 ps | 1.95 ns | 3.25 ns | 889–921 · 23.3 ps |
+| FF 27 °C 5.5 V | 432–668 ps | −229 · 509 ps | 554 ps | 1.18 ns | 2.01 ns | 574–591 · 14.4 ps |
+| FF 0 °C 5.5 V | 403–626 ps | −213 · 473 ps | 509 ps | 1.10 ns | 1.88 ns | 540–558 · 13.5 ps |
+| FS 27 °C 5 V | 483–733 ps | −250 · 636 ps | 622 ps | 1.37 ns | 2.22 ns | 626–644 · 15.4 ps |
+| SF 27 °C 5 V | 500–784 ps | −267 · 529 ps | 656 ps | 1.31 ns | 2.32 ns | 656–675 · 15.6 ps |
+
+- 가장 짧은 race는 모든 코너에서 같은 버퍼 안의 sr[18] → sr[19]이다(race = 그 플롭의 clk→Q). hold는 음수라(D가 클록 0.2–0.4 ns 앞에서 바뀌어도 이전 값을 잡음) 여유는 race보다 크고, 가장 작은 것이 FF 0 °C의 509 ps다. 같은 층 결합 2배를 모든 클록에 넣은 실행의 hold 여유(배선 저항만 뺌)는 SS 1003 ps, FF 561 ps다.
+- 가장 짧은 SCK 주기는 1.95 ns(SS 125 °C)라 10 MHz 스캔(100 ns)에 50배 여유다. 읽기(SCK → OUT, POB4 입력단까지)는 3.25 ns 이하로 반주기 50 ns 안이다.
+- SDI: 컨트롤러가 SDI를 SCK 상승 25 ns 전에 바꾸는 지금 순서로 sr[0]의 setup 여유 25.5 ns, hold 여유 73.9 ns다. 측정 컨트롤러는 SDI를 SCK 상승에서 setup(0.85 ns 이하) 넘게 앞서 바꾸면 된다.
+- RO 0 탭(칩 배선 포함, reltol 1e-3) TT 97.9·SS 67.3·FF 112.2 MHz, 분주 단은 탭 주기의 2^(k+1)배와 5 ppm 안으로 같고(창에서 두 번 이상 도는 4–5단), RO 멀티플렉서는 −0.09–5.10 V(TT), enable은 RO_EN0만.
+- 판정(`run_all.py timing`, 검사 62개): 선·읽기·시프트 틀림 0, hold 여유 ≥ 0, 가장 짧은 SCK 주기 ≤ 100 ns, 읽기 ≤ 50 ns, SDI 여유 ≥ 0, 분주 단 ≥ 4개·오차 ≤ 0.2 %, RO 멀티플렉서 흔들림 ≥ 90 %, RO 0 enable만. 2026-11-02 로컬 ngspice-42 2코어에서 모두 ok(`BLOCK CHECKS: 62 ok, 0 to check`). 처음부터는 약 75분(스캔 6코너·결합 2·RO 3 각 10–20분, DFFPOSX1 6코너), `--reuse`는 덱이 같은 실행의 기록과 파형을 다시 읽어 약 11분(LVS·배선 용량을 다시 뽑고 DFFPOSX1은 다시 돈다).

@@ -16,6 +16,13 @@
 #   7. chip_lvs.py: device-level LVS of everything inside the pad ring against the blocks' circuits, the
 #      frozen control netlist and the chip's connections (devices recognized as ETRI's Calibre LVS deck
 #      does); chip_lvs_selftest.py shows it catches errors (not run here, about 90 s)
+#   8. chip_erc.py: ERC on that netlist (floating gates, open ends, well ties and bulks, gates on pads)
+#   9. gds_check.py: the file itself (top cell, layers in the PDK map, 0.01 um grid, arrays, cells, labels)
+#  10. current_density.py: DC current density on the force and heater paths against 1 mA/um (assumed),
+#      and the current of via cuts and contacts against 1 mA/um x the cut's width (assumed too)
+#  11. scripts/calibre_rules.py: the checks of ETRI's Calibre DRC deck that the kit's KLayout deck leaves
+#      out (tap distance, implant and contact enclosures, PIP, poly2 resistor contacts ...), translated from
+#      the deck; markers in the pad ring alone and in the seal ring zone counted apart
 # Usage: [PDKV_SEAL=0] bash run_chip.sh [--rebuild]   (--rebuild remakes the inputs too)
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -68,6 +75,10 @@ klayout -b -r "$HERE/chip_check.py" -rd nets="$B/pdkv_nets.json" > "$B/chip_chec
 klayout -b -r "$REPO/scripts/antenna_rules.py" -rd gds="$B/pdkv_Top.gds" -rd nets="$B/pdkv_nets.json" \
   > "$B/pdkv_Top_antenna.txt" 2>&1
 python3 "$HERE/chip_lvs.py" --gds "$B/pdkv_Top.gds" > "$B/chip_lvs.log" 2>&1
+python3 "$HERE/chip_erc.py" --gds "$B/pdkv_Top.gds" > "$B/chip_erc.log" 2>&1
+python3 "$HERE/gds_check.py" --gds "$B/pdkv_Top.gds" > "$B/gds_check.log" 2>&1
+python3 "$HERE/current_density.py" --gds "$B/pdkv_Top.gds" > "$B/current_density.log" 2>&1
+python3 "$REPO/scripts/calibre_rules.py" --gds "$B/pdkv_Top.gds" --baseline "$B/pdkv_Pad.gds" > "$B/pdkv_Top_calibre_rules.txt" 2>&1
 {
   echo "pdkv chip $(date '+%Y-%m-%d %H:%M'), kit $(git -C "$KIT" log -1 --format=%h 2>/dev/null || echo unknown), $(( $(date +%s) - t0 )) s"
   grep -E '^wrote' "$B/assemble.log"
@@ -81,4 +92,12 @@ python3 "$HERE/chip_lvs.py" --gds "$B/pdkv_Top.gds" > "$B/chip_lvs.log" 2>&1
   cat "$B/pdkv_Top_antenna.txt"
   echo "-- device-level LVS inside the pad ring (chip_lvs.py)"
   cat "$B/chip_lvs.log"
+  echo "-- ERC on the extracted core (chip_erc.py)"
+  cat "$B/chip_erc.log"
+  echo "-- the GDS file for submission (gds_check.py)"
+  cat "$B/gds_check.log"
+  echo "-- DC current density, force and heater paths, 1 mA/um assumed (current_density.py)"
+  cat "$B/current_density.log"
+  echo "-- checks of ETRI's Calibre deck missing from the kit's KLayout deck (scripts/calibre_rules.py)"
+  cat "$B/pdkv_Top_calibre_rules.txt"
 } | tee "$B/chip_summary.txt"

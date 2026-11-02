@@ -105,3 +105,7 @@ make qflowsim  # qflow가 합성한 넷리스트(배치·배선에 들어간 것
 - 2026-11-01 Codespace에서 `make flow`를 처음부터 다시 돌린 `teg_ctrl_F_grid.gds`와 매크로는 모든 층의 XOR 면적이 0이다(배치·배선이 같은 입력에서 같은 결과를 냄).
 - 넷리스트도 함께 고정한다(2026-11-02). qflow는 배치 뒤 팬아웃 버퍼를 셀 위치에 맞춰 다시 나누므로 합성만 다시 해서는 매크로의 넷리스트가 나오지 않는다(다른 기계에서 GrayWolf 배치를 다시 하면 필러 수부터 달라짐). `macro/teg_ctrl.v`는 매크로를 만든 실행의 `synthesis/teg_ctrl.rtlnopwr.v`(`make qflowsim`이 시뮬레이션하는 것), `macro/teg_ctrl.spc`는 같은 실행의 `synthesis/teg_ctrl.spc`에서 킷 셀 라이브러리를 뺀 teg_ctrl 부분 회로(qflow LVS가 레이아웃과 비교한 것)다. 그 실행의 `teg_ctrl_F_grid.gds`와 매크로는 모든 층 XOR 0, qflow LVS는 "Circuits match uniquely"(11/1 15:35)였다. 셀 255개(필러 15)로 위 표와 같다. `v`에는 전원 핀이 없어 qflow `vlog2Spice`로 `spc`를 다시 만들 수 없으므로 둘 다 둔다.
 - 매크로 GDS(격자 맞춤·홈 메움 뒤)를 KLayout으로 소자 수준까지 뽑아 `macro/teg_ctrl.spc` + 킷 셀 트랜지스터 넷리스트와 비교하면 일치한다: NMOS 978·PMOS 1029개(병렬 결합 뒤 소자 쌍 1890개), 넷 1015개, 핀 70개. Magic 추출이 아닌 최종 GDS를 비교하므로 홈 메우기와 격자 맞춤이 회로를 바꾸지 않았다는 확인이기도 하다. 칩 안에서의 비교는 `../chip/chip_lvs.py`.
+
+### 칩 안 타이밍 (배선 포함)
+
+qflow `sta`는 킷 liberty의 셀 지연으로 본 것이라 그린 배선을 반영하지 않는다. 고정한 매크로가 칩에 들어간 상태의 타이밍은 `../sim/blocks/chip_timing.py`가 트랜지스터 수준으로 본다: 소자 수준 LVS가 일치한 칩 넷리스트에 그린 GDS의 배선 용량을 넣고, 시프트 레지스터 race(hold), 가장 짧은 SCK 주기(setup), SCK → OUT 읽기, RO 분주기를 6개 코너(TT·SS 125 °C·FF 27/0 °C·FS·SF)에서 잰다. 2026-11-02 결과: 그린 DFFPOSX1의 hold가 음수(FF 0 °C −213 ps에서 SS 125 °C −378 ps)라 hold 여유(배선 저항 상한 99.9 ps와 같은 층 결합을 뺀 것)가 509 ps 이상, 가장 짧은 SCK 주기 1.95 ns(SS 125 °C), 읽기 3.25 ns 이하, 시프트 1790번·읽기 80비트 틀림 0(`../sim/blocks/README.md`의 "제어 블록 타이밍").
