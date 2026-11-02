@@ -55,9 +55,10 @@ def wiring_loads():
     return _LOADS
 
 
-def ro_netlist(i, kind, loads, corner, temp, vdd=5.0):
+def ro_netlist(i, kind, loads, corner, temp, vdd=5.0, reltol='1e-4'):
+    """RO i of the block netlist; reltol as the run it is compared with (chip_post.py uses 1e-3)."""
     order = {"INVX1": "A Y", "INVX4": "A Y", "NAND2X1": "A B Y", "NOR2X1": "A B Y"}
-    n = header(corner, temp) + f"vdd vdd 0 {vdd}\nven en{i} 0 pwl(0 0 20n 0 20.5n {vdd})\n"
+    n = header(corner, temp, reltol=reltol) + f"vdd vdd 0 {vdd}\nven en{i} 0 pwl(0 0 20n 0 20.5n {vdd})\n"
     for inst, cell, pins in gen.stage_nets(i, kind):
         nodes = [{"VDD": "vdd", "VSS": "0"}.get(pins[p], pins[p]) for p in order[cell].split()]
         n += f"{inst} {' '.join(nodes)} vdd 0 {cell}\n"

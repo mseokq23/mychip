@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Run every block check and compare with the values recorded in the chip plan.
 
-usage: python3 run_all.py [tg array kelvin post cbcm cbcm_block cbcm_post ro ro_post scan pnp lsplit]   (default:
+usage: python3 run_all.py [tg array kelvin post cbcm cbcm_block cbcm_post ro ro_post scan pnp lsplit chip]   (default:
 all; post only when designs/etri050/array/build/kelvin_r.json exists (designs/etri050/array/kelvin_r.py),
 cbcm_post when designs/etri050/cbcm/build/cbcm_c.json exists (designs/etri050/cbcm/cbcm_c.py), ro_post when
 designs/etri050/ro/build/robank_flat.gds exists (designs/etri050/gen/etri050_ro.py; the resistor RO when
-rores_full.gds exists too))
+rores_full.gds exists too); chip only when named (needs designs/etri050/chip/build/pdkv_Top.gds from
+run_chip.sh, about 45 min on 2 cores))
 
 Each line ends with ok or CHECK. CHECK means the result moved outside the tolerance
 (for example a different ngspice version or model file) and needs a look, not that the
@@ -21,6 +22,7 @@ import array_post
 import cbcm
 import cbcm_block
 import cbcm_post
+import chip_post
 import ro_post
 import lsplit
 import pnp_thermo
@@ -150,14 +152,58 @@ def run_lsplit():
     expect('Terada-Muta R_sd 125 C', r[('tm', 125)][1], 135.1, 3, 'ohm')
 
 
+def worst(values):
+    """The largest value, NaN if any is (a failed measurement must read CHECK)."""
+    values = list(values)
+    return float('nan') if any(v != v for v in values) else max(values)
+
+
+def run_chip():
+    r = chip_post.main()
+    nf = len(chip_post.F_SCAN)
+    for corner, temp, vdd in chip_post.SCAN_CORNERS:
+        s = r[('scan', corner)]
+        tag = f'{corner} {temp} C {vdd:g} V'
+        expect(f'chip {tag}: lines wrong after the {nf} SLEs', sum(map(len, s['after'])), 0, 0)
+        expect(f'chip {tag}: lines wrong mid next shift', sum(map(len, s['mid'])), 0, 0)
+        expect(f'chip {tag}: read-back bits wrong (of {s["readback_n"]})', s['readback_bad'], 0, 0)
+        n_err = 100 * (-s['iadf'][0] / s['iref'][0] - 1)
+        p_err = 100 * (s['iadf'][1] / s['iref'][1] - 1)
+        expect_max(f'chip {tag}: array NMOS r2 c0 I(ADF) vs device alone', abs(n_err), 0.01, '%')
+        expect_max(f'chip {tag}: array PMOS r9 c1 I(ADF) vs device alone', abs(p_err), 0.01, '%')
+        expect_max(f'chip {tag}: selected row gate minus AG', worst(abs(g - a) for g, a in zip(s['vg'], s['vag'])) * 1e3, 1.0, 'mV')
+        expect_max(f'chip {tag}: |I(AG)|', worst(abs(i) for i in s['iag']) * 1e9, 1.0, 'nA')
+        expect_max(f'chip {tag}: mode 00 |I(ADF)| (gmin only)', abs(s['iadf'][2]) * 1e9, 1.0, 'nA')
+    c = r[('cbcm', 'TT')]
+    expect('chip CBCM cell 1 (PIP) minus block netlist', (c['cell1']['c'] - c['block_cell1']) * 1e15, 0.0, 1.0, 'fF')
+    expect_max('chip CBCM cell 0 (empty) |C|', abs(c['cell0']['c']) * 1e15, 0.05, 'fF')
+    expect_min('chip CBCM cell 0 clocked: charge from VCD', c['cell0']['qd'] * 1e15, 50, 'fC')
+    expect('chip CBCM enable lines wrong (3 frames x 10)', sum(len(c[k]['en_wrong']) for k in ('cell1', 'cell0', 'idle')), 0, 0)
+    expect('chip CBCM_CLK rises in mode 10 (2 windows)', c['cell1']['ck_rises'] + c['cell0']['ck_rises'], 2 * chip_post.NCK, 0)
+    expect_max('chip CBCM_CLK swing in mode 01 (gated)', c['idle']['ck_swing'], 0.1, 'V')
+    expect_max('chip CBCM idle: |charge| per period', worst((abs(c['idle']['qd']), abs(c['idle']['qr']))) * 1e15, 1.0, 'fC')
+    ro0, ro3 = r[('ro', 0)], r[('ro', 3)]
+    expect('chip RO 0 (INV): half OUT period x f(ro_in0)', ro0['t_half'] * ro0['f_ro'], 128, 0.5)
+    # same reltol on both sides; a stage more or less would move it by about 6 %
+    expect_max('chip RO 0 (INV) f(ro_in0) vs block netlist', abs(100 * (ro0['f_ro'] / ro0['f_block'] - 1)), 1.0, '%')
+    expect('chip RO 0 run: enables wrong (RO_EN0 only)', len(ro0['en_wrong']), 0, 0)
+    # still = not running: a running ring swings its tap rail to rail; without wiring capacitance a still
+    # tap next to the running one picks up 0.14 V through the RO mux's gates (RO_IN2, 2026-11-02)
+    expect_max('chip RO 0 run: other taps swing', worst(ro0['swing'].values()), 1.0, 'V')
+    expect('chip RO 3 (not built) run: enables wrong (none)', len(ro3['en_wrong']), 0, 0)
+    expect_max('chip RO 3 run: taps, RO mux, OUT swing', worst(ro3['swing'].values()), 1.0, 'V')
+
+
 STEPS = dict(tg=run_tg, array=run_array, kelvin=run_kelvin, post=run_post, cbcm=run_cbcm, cbcm_block=run_cbcm_block,
-             cbcm_post=run_cbcm_post, ro=run_ro, ro_post=run_ro_post, scan=run_scan, pnp=run_pnp, lsplit=run_lsplit)
+             cbcm_post=run_cbcm_post, ro=run_ro, ro_post=run_ro_post, scan=run_scan, pnp=run_pnp, lsplit=run_lsplit,
+             chip=run_chip)
 OPTIONAL = {'post': array_post.KELVIN_R, 'cbcm_post': cbcm_post.CJSON,      # default only when their input exists
             'ro_post': ro_post.GDS}
+ASKED = {'chip'}                                                            # only when named (about 45 min)
 
 
 def main():
-    names = sys.argv[1:] or [n for n in STEPS if n not in OPTIONAL or os.path.exists(OPTIONAL[n])]
+    names = sys.argv[1:] or [n for n in STEPS if n not in ASKED and (n not in OPTIONAL or os.path.exists(OPTIONAL[n]))]
     for n in names:
         t = time.time()
         print(f"\n== {n}", flush=True)
