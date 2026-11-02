@@ -4,10 +4,12 @@ KLayout, so it runs on the Calibre machine too.
 
   1. pong_pt1: every rule check's count and every layer's geometry count must equal ETRI's summary
      (pong_pt1_Pad.drc.summary.etri): then this Calibre and its settings check a GDS as ETRI's run did.
-  2. pdkv_Top (and pdkv_Top_noseal): each result is sorted by where it lies (expected.json):
+  2. pdkv_Top (and pdkv_Top_noseal, made only from a chip built with PDKV_SEAL=1): each result is sorted by
+     where it lies (expected.json):
        pad cells   inside ETRI's GPIO cells (identical to ETRI's library; ETRI's pong run had results there too)
-       seal ring   in the seal ring's 30 um, of a check the ring is known to give (contact and via widths,
-                   which the deck's history says are waived there, 2.ACT.E5 and 6.PSD.E)
+       seal ring   (a chip with seal ring only) in the seal ring's 30 um, of a check the ring is known to give
+                   (contact and via widths, which the deck's history says are waived there, 2.ACT.E5 and
+                   6.PSD.E)
        known       a place our checks predicted (the CBCM n+ junction cells, 1.PWL.bad2)
        UNEXPECTED  anything else: our checks missed it, see the coordinates (um, chip)
   3. pdkv_Top antenna: results, if any (our check of the rule document's antenna rules is clean).
@@ -168,6 +170,8 @@ def main(argv=None):
         ok = False
     print("== 2. pdkv_Top DRC")
     for name in ("pdkv_Top", "pdkv_Top_noseal"):
+        if name.endswith("noseal") and not (folder / f"drc_{name}.cal").exists():
+            continue                                           # the package has it only for a chip with seal ring
         e = dict(exp, seal_ring=0.0) if name.endswith("noseal") else exp
         bad = drc(folder, name, e)
         if bad is not None or name == "pdkv_Top":                 # the variant without seal ring is optional

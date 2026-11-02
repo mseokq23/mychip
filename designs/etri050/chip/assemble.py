@@ -34,16 +34,23 @@ heater return goes on its own line into PVSS. PNP2 in the far (south-west) corne
 about 1 mm from the heater. The ro_in input of the RO not built (FO4, index 3) is tied to the
 control block's ground bar.
 
-Chip boundary and seal ring (-rd seal=0 leaves both out): the MyChip MPW standard chip is 1.9 x 1.9
-mm and the kit centres the pad ring on it (generate_chip.sh puts it at 97.5 um), so CHIPBOUNDARY
-(rule document 2.1, layer 0) is the box 0-1900 um. The seal ring is a block of its own, pdkv_SEAL,
-written to <out>/pdkv_seal.gds and drawn in the outer 30 um as the 4.21 figure gives it (SEAL_RING).
+Chip boundary and seal ring: none by default; -rd seal=1 adds both. The MyChip MPW standard chip is
+1.9 x 1.9 mm with the pad ring at 97.5 um (the kit's generate_chip.sh, PDK MPW_PAD_28pin), but the 2026-4
+announcement counts the 120 um scribe lane in those 1.9 mm, so its outer 60 um is scribe lane (the PDK's
+MPW_PAD_28pin.gds marks the box 60-1840 um on TEXT 48). A 4.21 ring inside it (60-90 um) would leave 7.5
+um to the pads, not the 30 um the figure asks; ETRI's GDS template and the fabricated precedents
+(FIR_PE, pong_pt1) have no seal ring and no layer 0, and our chip goes in the same way (extent 97.5-1802.5
+um). With seal=1: CHIPBOUNDARY (rule document 2.1, layer 0) is the box 0-1900 um and the seal ring,
+a block of its own (pdkv_SEAL, written to <out>/pdkv_seal.gds), is drawn in the outer 30 um as the 4.21
+figure gives it (SEAL_RING) - in the scribe lane, which gds_check.py reports.
+
+Text positions are put on the 0.01 um grid before writing (the resistor RO's Magic labels sit at 5 nm).
 
 Outputs: <out>/pdkv_Top.gds and <out>/pdkv_nets.json (expected nets as probe points, and the block
 placements) for chip_check.py.
 
 usage: klayout -b -r designs/etri050/chip/assemble.py -rd repo=<repo root> [-rd out=<dir>]
-       [-rd pad=<pdkv_Pad.gds>] [-rd direct=<dir with lsplit, mosc, pnp10, heater .gds>] [-rd seal=0]
+       [-rd pad=<pdkv_Pad.gds>] [-rd direct=<dir with lsplit, mosc, pnp10, heater .gds>] [-rd seal=1]
        [-rd array=<karray.gds>] [-rd cbcm=<cbcm_full.gds>] [-rd robank=<robank_flat.gds>]
        [-rd rores=<rores_full.gds>]
 """
@@ -73,7 +80,7 @@ ARRPINS = os.path.join(os.path.dirname(SRC['karray']), 'karray_pins.json')
 CBPINS = os.path.join(os.path.dirname(SRC['cbcm']), 'cbcm_pins.json')
 ROPINS = os.path.join(os.path.dirname(SRC['robank']), 'robank_pins.json')
 RRPINS = os.path.join(os.path.dirname(SRC['rores']), 'rores_pins.json')
-SEAL = str(globals().get('seal', '1')) != '0'
+SEAL = str(globals().get('seal', '0')) != '0'
 PINFILE = os.path.join(REPO, 'designs/etri050/ctrl/macro/teg_ctrl_pins.txt')
 PADFILE = os.path.join(os.path.dirname(SRC['pad']), 'pad_pins.json')
 
@@ -754,6 +761,19 @@ for net, (joint, force, sense) in KELVIN.items():
     if tagged != 2:
         raise RuntimeError(f'Kelvin pair {net}: {tagged} of the points {force}, {sense} found')
     star.append({'net': net, 'joint': joint})
+
+# ---- texts on the 0.01 um grid (the design grid of the announcement; texts are no geometry, but every
+# coordinate of the file then is on it) ------------------------------------------------------------------
+snapped = 0
+for c in ly.each_cell():
+    for li in ly.layer_indexes():
+        for s in list(c.shapes(li).each()):
+            if s.is_text() and (s.text.x % 10 or s.text.y % 10):
+                t = s.text
+                t.x, t.y = int(round(t.x / 10.0)) * 10, int(round(t.y / 10.0)) * 10
+                s.text = t
+                snapped += 1
+print(f'texts moved onto the 0.01 um grid: {snapped}')
 
 os.makedirs(OUT, exist_ok=True)
 gds = os.path.join(OUT, 'pdkv_Top.gds')

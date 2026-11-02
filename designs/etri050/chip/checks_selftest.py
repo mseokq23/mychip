@@ -7,7 +7,9 @@ catch, on copies of the chip GDS.
                    nothing); the array's n+ well taps without contacts (PMOS bulks on wells no pad
                    reaches); the L-split gate bar joined to the D1 drain strip (a gate on a PAD force port)
   GDS              a vertex 5 nm off the grid; a shape on a layer the PDK map does not have; a shape on
-                   NODRC; an edge at 30 degrees; a top-level label on MET2TXT
+                   NODRC; an edge at 30 degrees; a top-level label on MET2TXT; a metal1 square in the scribe
+                   lane (the outer 60 um); one analog pad moved by 1 um (its bond pad no longer that of
+                   MPW_PAD_28pin); a text 5 nm off the grid
   current density  the HT force line narrowed to 3 um for 10 um next to its pad port (7 mA: 2.3 mA/um);
                    14 of the 15 VIA1 cuts under the heater's head A removed (7 mA through one cut)
   Calibre-only     MOS-C's n+ well taps removed (2.ACT.T1: no tap within 60 um); the L-split NSD pulled
@@ -21,7 +23,7 @@ Each fault must turn its check from clean to failing, naming the fault. ERC, the
 7-12 pass as built; current density and the Calibre-only checks already report findings as built (the
 1 mA/um assumption; the CBCM n+ junction cells), so their faults must add a finding of their own.
 
-usage: python3 designs/etri050/chip/checks_selftest.py [--gds build/pdkv_Top.gds]    (about 7 min)
+usage: python3 designs/etri050/chip/checks_selftest.py [--gds build/pdkv_Top.gds]    (about 8 min)
 """
 import argparse
 import contextlib
@@ -145,6 +147,22 @@ def label(ly):
     ly.top_cell().shapes(ly.layer(44, 0)).insert(kdb.Text("VDD", kdb.Trans(kdb.Point(600000, 600000))))
 
 
+def in_lane(ly):
+    """A metal1 square in the west scribe lane (x 30-40 um)."""
+    ly.top_cell().shapes(ly.layer(32, 0)).insert(kdb.DBox(30, 900, 40, 910).to_itype(ly.dbu))
+
+
+def move_pad(ly):
+    """Move the pad ring's first analog pad (PANA) by 1 um."""
+    ring = ly.cell("pdkv_Pad")
+    inst = next(i for i in ring.each_inst() if i.cell.name == "PANA")
+    inst.transform(kdb.Trans(kdb.Vector(1000, 0)))
+
+
+def text_off_grid(ly):
+    ly.top_cell().shapes(ly.layer(48, 0)).insert(kdb.Text("x", kdb.Trans(kdb.Point(600005, 600000))))
+
+
 def narrow_ht(ly):
     """Cut the HT line's 9 um metal2 (y 1350-1359) to 3 um over x 1440-1450 (die um), next to E7."""
     top = ly.top_cell()
@@ -177,7 +195,7 @@ def erc(g):
 
 
 def gds(g):
-    ok, out = gds_check.check(g, gds_check.gpio_default())
+    ok, out = gds_check.check(g, gds_check.gpio_default(), gds_check.pads_default())
     return ok, "\n".join(out)
 
 
@@ -214,6 +232,9 @@ TESTS = [("ERC: SDI cut at its port", cut_port("SDI"), erc, "float"),
          ("GDS: NODRC shape", nodrc, gds, "not a designer's layer: ['NODRC']"),
          ("GDS: 30 degree edge", skew, gds, "edges at other angles: pdkv_Top layer 32"),
          ("GDS: top-level MET2TXT label", label, gds, "VDD@MET2TXT"),
+         ("GDS: metal1 in the scribe lane", in_lane, gds, "shapes in it: MET1 1 in (30,900;40,910)"),
+         ("GDS: an analog pad moved by 1 um", move_pad, gds, "in MPW_PAD_28pin.gds, XOR 2 in"),
+         ("GDS: a text 5 nm off grid", text_off_grid, gds, "text positions off it: pdkv_Top layer 48: 1"),
          ("current density: HT line 3 um", narrow_ht, density, "HT: m2 3.00 um"),
          ("current density: one VIA1 under heater head A", one_via, density, "HT: v1 x1, 7.00-7.00 mA per cut"),
          ("Calibre: MOS-C well taps removed", untap_mosc, calibre, "2.ACT.T1 worst distance from transistor diffusion to a tap of its well: over 60"),

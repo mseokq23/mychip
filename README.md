@@ -96,13 +96,15 @@ klayout-etri designs/etri050/teg/build/chip/teg_chip_v0.gds      # noVNC 데스�
 - `designs/etri050/sim/blocks/`: 어레이 경로, 스위치 TG, CBCM, RO 뱅크, 스캔·분주, PNP 온도계, L-split의 ngspice 검사. `python3 run_all.py`가 설계 계획의 수치와 비교한다. 공식 PDK 모델은 킷 문서 폴더의 압축본에서 꺼내므로 `ETRI050_WITH_DOCS=1 bash scripts/setup-etri050.sh`가 한 번 필요하다.
 - `designs/etri050/direct/`: 직결 기준 소자. L-split·MOS-C는 Magic으로 그리고(`gen/etri050_direct.py`, LVS 포함), PNP(pnp10)와 poly2 히터는 PDK 층 GDS로 만든다(`run_pdk_cells.sh`).
 - `designs/etri050/array/`: Kelvin 소자 어레이 12행(NMOS 8, PMOS 4) × 8열(기하 7종 + open 열). `gen/etri050_array.py`로 그리고 LVS까지 맞추며, `kelvin_r.py`가 그린 어레이에서 Kelvin 루프 안에 남는 저항을 셀마다 뽑는다(측정 보정 표 `kelvin_r.csv`).
-- `designs/etri050/chip/`: 28핀 패드 링(`run_pad_ring.sh`)과 칩 조립(`run_chip.sh` → `build/pdkv_Top.gds`, 칩 경계 1.9 × 1.9 mm와 규칙 문서 4.21 실링 포함). 조립 뒤 칩 전체에 공식 규칙 덱, 규칙 문서 값의 금속·비아·실링 검사, 금속 연결 검사(끊김·단락·떠 있는 금속·0.01 µm 격자), 규칙 문서의 안테나 검사(`scripts/antenna_rules.py`), 소자 수준 LVS·ERC·제출 GDS·직류 전류 밀도 검사, ETRI Calibre 덱에만 있는 검사(`scripts/calibre_rules.py`, 킷 pong_pt1의 Calibre 결과로 확인)를 한다. 칩 넷리스트의 트랜지스터 수준 모의와 배선 용량을 넣은 제어 블록 타이밍은 `sim/blocks/`의 `run_all.py chip timing`이다. 실제 Calibre로 ETRI 덱·설정 그대로 돌릴 묶음(pong_pt1로 설정 확인, 칩 DRC·안테나, 코어 LVS 입력)과 결과 비교는 `designs/etri050/chip/calibre/`다.
+- `designs/etri050/chip/`: 28핀 패드 링(`run_pad_ring.sh`)과 칩 조립(`run_chip.sh` → `build/pdkv_Top.gds`, 1.9 × 1.9 mm 표준칩 좌표, 스크라이브 레인인 바깥 60 µm는 비우고 실링·칩 경계 없음; `PDKV_SEAL=1`이면 규칙 문서 4.21 실링을 넣음). 조립 뒤 칩 전체에 공식 규칙 덱, 규칙 문서 값의 금속·비아 검사, 금속 연결 검사(끊김·단락·떠 있는 금속·0.01 µm 격자), 규칙 문서의 안테나 검사(`scripts/antenna_rules.py`), 소자 수준 LVS·ERC·제출 GDS(스크라이브 레인, 본딩 패드가 PDK `MPW_PAD_28pin`과 같은지, 0.01 µm 격자 등)·직류 전류 밀도 검사, ETRI Calibre 덱에만 있는 검사(`scripts/calibre_rules.py`, 킷 pong_pt1의 Calibre 결과로 확인)를 하고, 제출 GDS 검사를 통과하면 제출 파일 `build/pdkv_Top.zip`을 만든다. 칩 넷리스트의 트랜지스터 수준 모의와 배선 용량을 넣은 제어 블록 타이밍은 `sim/blocks/`의 `run_all.py chip timing`이다. 실제 Calibre로 ETRI 덱·설정 그대로 돌릴 묶음(pong_pt1로 설정 확인, 칩 DRC·안테나, 코어 LVS 입력)과 결과 비교는 `designs/etri050/chip/calibre/`다.
 
-### 마이칩 제출 조건 (ETRI 소개 자료, 2026-06 기준)
+### 마이칩 제출 조건 (ETRI 소개 자료 2026-06, 2026년 4차 안내 사항)
 
-- 칩 1.9 × 1.9 mm, 팀당 설계 면적 1.5 × 1.5 mm (GPIO를 쓰면 1.0 × 1.0 mm). 패키지를 하지 않으면 패드를 자유롭게 배치할 수 있다.
+- 칩 1.9 × 1.9 mm(스크라이브 레인 120 µm 포함: 변마다 바깥 60 µm), 팀당 설계 면적 약 1.5 × 1.5 mm (GPIO를 쓰면 약 1.0 × 1.0 mm). 면적을 나눠(1/4·1/2·1칩) 신청할 수 있고, 더 큰 칩은 사전 협의(패키지 불가)다. 패키지는 표준칩 배치 MPW_PAD_28pin(28-pin SOP)일 때만 한다.
+- 설계 DB: GDSII를 zip으로 내고 Top Cell Name을 적는다. 최소 grid 0.01 µm. 칩 제공 형태(패키지 약 20개 / bare die 30개)를 신청서에 적는다.
+- PDK: 0.5 µm Analog CMOS 2-poly 3-metal, 모델(HSPICE·Spectre) 온도 범위 25–115 °C, Calibre·Assura 덱(DRC·LVS·PEX), pcell, GPIO 9종(사용 권장), 디지털 표준셀 33종.
 - 설계를 끝낸 뒤 신청서와 설계 DB를 모아팹에 팀 단위로 접수한다. 칩은 DB 제출 약 5개월 뒤에 받는다.
-- 팀당 패키지 칩 20개(28-pin SOP)와 bare die 30개를 받는다. 측정할 때는 패키지 윗면을 검은 테이프 등으로 가려 빛을 막는다.
+- 소개 자료는 팀당 패키지 칩 20개(28-pin SOP)와 bare die 30개라고 적었고, 4차 안내는 제공 형태를 신청서에 적게 한다. 측정할 때는 패키지 윗면을 검은 테이프 등으로 가려 빛을 막는다.
 - 공식 검증 덱은 Calibre·Assura용이다. 이 환경의 Magic·KLayout 검사는 오픈소스 변환본이니, 제출 전 검증 절차는 공고문으로 확인한다.
 
 ### 주의
@@ -110,7 +112,7 @@ klayout-etri designs/etri050/teg/build/chip/teg_chip_v0.gds      # noVNC 데스�
 - 킷의 `sch/fet_models.sym`에는 MOSIS AMI C5 모델이 들어 있다. ETRI 결과가 아니니, 반드시 `spice/05cmos_model_240201.lib`(소자 이름 nfet/pfet)를 쓴다.
 - 공식 PDK(260820)의 모델 파일 `05cmos_model_260210`은 소자 이름이 nmos4/pmos4다. Magic 추출 이름(nfet/pfet)과 섞으면 LVS가 어긋난다.
 - Magic에서 `gds write`를 직접 칠 때는 먼저 `cif ostyle lambda=0.30(ETRI)`를 지정한다. 기본 스타일은 MOSIS 층 번호(41, 43, …)로 써서 ETRI 제출용이 아니다. `etri-gds`는 이걸 자동으로 한다. 패드 프레임처럼 이미 ETRI 층인 GDS를 그대로 합칠 때는 킷의 `scripts/generate_chip.sh`처럼 `lambda=0.30(ETRI-G)` 스타일을 쓴다.
-- 온도 특성: ETRI 소개 자료(2026-06)는 모델에 25~125 °C 온도 파라미터가 있다고 밝히지만, 모델 파일 머리말에는 아직 미포함이라고 적혀 있다. 125 °C 결과는 실측으로 확인하기 전까지 모델 값으로만 본다.
+- 온도 특성: ETRI 소개 자료(2026-06)는 모델에 25~125 °C 온도 파라미터가 있다고 밝혔고, 2026년 4차 안내는 모델 온도 범위를 25~115 °C로 적는다. 모델 파일 머리말에는 아직 미포함이라고 적혀 있다. 115 °C를 넘는 결과(설계 여유를 본 SS 125 °C 코너 등)와 25 °C 아래(FF 0 °C hold 코너)는 모델 범위 밖의 외삽이고, 125 °C 결과는 실측으로 확인하기 전까지 모델 값으로만 본다. 모델과 실측을 견주는 온도는 25–115 °C 안에서 고른다.
 - `etri-lvs`는 추출 결과를 `<cell>.spice`로 저장한다. 회로도 넷리스트는 다른 폴더(예: `netlist/`)에 두고, Xschem에서는 top level을 `.subckt`로 감싼 LVS용 넷리스트를 뽑는다.
 - LVS에서 핀 이름까지 비교하려면 레이아웃의 라벨을 포트로 만든다. Magic 명령창에서 셀 전체를 box로 덮고 `port makeall`을 실행한 뒤 저장한다. 포트가 없으면 `etri-lvs`는 소자와 연결만 비교하고 그 사실을 알려 준다. 결과 줄은 `ETRI-LVS <cell>: MATCH`이고, W/L이 다르면 `MATCH but property errors`로 나온다.
 - 오픈소스 DRC 덱은 공식 Calibre 규칙을 옮긴 것이다. 최종 제출 전 검증 절차는 운영 측 안내를 따른다.

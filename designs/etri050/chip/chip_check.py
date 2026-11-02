@@ -194,9 +194,12 @@ def main(spec_file):
         sl = pya.Layout()
         sl.read(spec['top'])
         stop = sl.top_cell()
-        gone = [i for i in stop.each_inst() if i.cell.name == jl.top_cell().name]
-        for i in gone:
-            i.delete()
+        gone = len([i for i in stop.each_inst() if i.cell.name == jl.top_cell().name])
+        # the joint block goes with its cell: in KLayout 0.28 (klayout -b), deleting its instance and then
+        # flattening also loses the top cell's next instance (with the seal ring that was pdkv_SEAL, after
+        # pdkv_Pad; without it the control block, whose ground then seemed cut)
+        if gone:
+            sl.cell(jl.top_cell().name).prune_cell()
         sl2n, sregs = extract(sl, stop)
         branch = {}
         for p in spec['nets'][st['net']]:
@@ -210,7 +213,7 @@ def main(spec_file):
         apart = not shared
         for i, names in shared.items():
             print(f"  star {st['net']}: branches {sorted(names)} share net {i} without {st['joint']}")
-        problems = len(gone) != 1
+        problems = gone != 1
         for name, pts in branch.items():
             ids = {i for _, i in pts}
             one = len(ids) == 1 and None not in ids
@@ -223,7 +226,7 @@ def main(spec_file):
         problems += not apart
         print(f"  star {st['net']}: {len(branch)} branches meet only in {st['joint']} -> "
               f"{'ok' if not problems else 'JOINED OUTSIDE IT' if not apart else 'PROBLEM'}"
-              + (f" ({len(gone)} instances of {st['joint']} removed)" if len(gone) != 1 else ''))
+              + (f" ({gone} instances of {st['joint']} removed)" if gone != 1 else ''))
         star_bad += problems > 0
     bad += star_bad
 
