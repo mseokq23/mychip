@@ -257,26 +257,28 @@ def lines_for(state):
 RO_BUILT = (0, 1, 2, 4, 5)      # RO 3 (FO4) is not on the chip: ro_en[3] open, ro_in[3] tied low
 
 
-def deck(corner, temp, vdd, extra="", reltol="1e-4", abstol="1e-12"):
+def deck(corner, temp, vdd, extra="", reltol="1e-4", abstol="1e-12", par="", load=None):
     """Gear integration and abstol 1 pA: with the trapezoidal rule or abstol 1 fA the 3000-device
-    netlist stops at the first scan edges ('timestep too small' on a quiet pad source's branch)."""
+    netlist stops at the first scan edges ('timestep too small' on a quiet pad source's branch).
+    par: lines added to the netlist (chip_timing.py: wiring capacitance); load: what OUT drives
+    (default OUT_LOAD)."""
     lines, names, devs = chip_netlist()
     body = "\n".join(lines).replace("{R_SQ*", "{RSQ*")
     return (header(corner, temp, reltol=reltol, method="gear", abstol=abstol)
             + ".options gmin=1e-12\n.lib '05cmos_model_260210.lib' BJT\n"
-            + f".param RSQ={p2res(temp, 1.0):.6g}\n" + body + "\n"
-            + src("vdd", "VDD", vdd) + f"cout OUT 0 {OUT_LOAD}\n" + extra)
+            + f".param RSQ={p2res(temp, 1.0):.6g}\n" + body + "\n" + par
+            + src("vdd", "VDD", vdd) + (f"cout OUT 0 {OUT_LOAD}\n" if load is None else load) + extra)
 
 
-def control(tran, meas):
+def control(tran, meas, post=""):
     """The .control block: the transient, the measurements [(name, ngspice meas text)] and their values
-    echoed as RES lines (50 a line)."""
+    echoed as RES lines (50 a line); post: commands after them (chip_timing.py: wrdata)."""
     x = f".control\nset noaskquit\n{tran}\n"
     x += "".join(f"meas tran {k} {m}\n" for k, m in meas)
     keys = [k for k, _ in meas]
     for i in range(0, len(keys), 50):
         x += 'echo "RES ' + " ".join(f"{k}=$&{k}" for k in keys[i:i + 50]) + '"\n'
-    return x + "quit\n.endc\n.end\n"
+    return x + post + "quit\n.endc\n.end\n"
 
 
 def value(r, k):
@@ -310,7 +312,7 @@ SCAN_CORNERS = (("TT", 27, 5.0), ("SS", 125, 4.5), ("FF", 27, 5.5))
 SCAN_RELTOL = "1e-3"
 
 
-def scan_net(corner, temp, vdd):
+def scan_net(corner, temp, vdd, par="", load=None, post=""):
     lines, names, devs = chip_netlist()
     n = names
     x, marks, edges = scan_sources(F_SCAN, vdd)
@@ -339,13 +341,17 @@ def scan_net(corner, temp, vdd):
                  (f"f{k}_vag", f"find v(AG) at={tm:.6e}"), (f"f{k}_iag", f"find i(vag) at={tm:.6e}")]
     # OUT while frames 2 ... shift in: the bits of the frame before
     meas += [(f"o{k}", f"find v(OUT) at={te - 2e-9:.6e}") for k, te in enumerate(edges[NBIT:])]
-    x += control(f"tran 2n {marks[-1][1] + PER:.6e} 0 2n uic", meas)
-    return deck(corner, temp, vdd, x, reltol=SCAN_RELTOL)
+    x += control(f"tran 2n {marks[-1][1] + PER:.6e} 0 2n uic", meas, post)
+    return deck(corner, temp, vdd, x, reltol=SCAN_RELTOL, par=par, load=load)
 
 
 def scan(args):
     corner, temp, vdd = args
-    r = run(scan_net(corner, temp, vdd), f"chip_scan_{corner}_{temp}")
+    return scan_result(run(scan_net(corner, temp, vdd), f"chip_scan_{corner}_{temp}"), vdd)
+
+
+def scan_result(r, vdd):
+    """What a scan run's measurements show (chip_timing.py reads its runs the same way)."""
     out = {"after": [wrong_lines(r, f"f{k}", f, vdd) for k, f in enumerate(F_SCAN)],
            "mid": [wrong_lines(r, f"h{k}", f, vdd) for k, f in enumerate(F_SCAN[:-1])]}
     want = [(f >> i) & 1 for f in F_SCAN[:-1] for i in range(NBIT - 1, -1, -1)]
@@ -421,7 +427,7 @@ def cbcm(args):
 RO_RELTOL = "1e-3"
 
 
-def ro_net(corner, temp, vdd, rosel, t_run):
+def ro_net(corner, temp, vdd, rosel, t_run, par="", load=None, post=""):
     lines, names, devs = chip_netlist()
     x, marks, edges = scan_sources([frame(mode=3, rosel=rosel, osel=1)], vdd, holds=[t_run])
     s1, tend = marks[0]
@@ -441,8 +447,8 @@ def ro_net(corner, temp, vdd, rosel, t_run):
     for k, (label, node) in enumerate(still.items()):
         meas += [(f"smax{k}", f"max v({node}) from={ta:.6e} to={tend:.6e}"),
                  (f"smin{k}", f"min v({node}) from={ta:.6e} to={tend:.6e}")]
-    x += control(f"tran 0.1n {tend:.6e} {s1:.6e} uic", meas)
-    return deck(corner, temp, vdd, x, reltol=RO_RELTOL), list(still)
+    x += control(f"tran 0.1n {tend:.6e} {s1:.6e} uic", meas, post)
+    return deck(corner, temp, vdd, x, reltol=RO_RELTOL, par=par, load=load), list(still)
 
 
 def ro(args):

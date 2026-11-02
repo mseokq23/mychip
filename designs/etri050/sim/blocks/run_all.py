@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Run every block check and compare with the values recorded in the chip plan.
 
-usage: python3 run_all.py [tg array kelvin post cbcm cbcm_block cbcm_post ro ro_post scan pnp lsplit chip]   (default:
+usage: python3 run_all.py [tg array kelvin post cbcm cbcm_block cbcm_post ro ro_post scan pnp lsplit chip timing]   (default:
 all; post only when designs/etri050/array/build/kelvin_r.json exists (designs/etri050/array/kelvin_r.py),
 cbcm_post when designs/etri050/cbcm/build/cbcm_c.json exists (designs/etri050/cbcm/cbcm_c.py), ro_post when
 designs/etri050/ro/build/robank_flat.gds exists (designs/etri050/gen/etri050_ro.py; the resistor RO when
-rores_full.gds exists too); chip only when named (needs designs/etri050/chip/build/pdkv_Top.gds from
-run_chip.sh, about 45 min on 2 cores))
+rores_full.gds exists too); chip and timing only when named (they need designs/etri050/chip/build/pdkv_Top.gds
+from run_chip.sh; about 45 and 75 min on 2 cores); --reuse: timing reads its last runs again where the
+deck is unchanged, as chip_timing.py --reuse)
 
 Each line ends with ok or CHECK. CHECK means the result moved outside the tolerance
 (for example a different ngspice version or model file) and needs a look, not that the
@@ -23,6 +24,7 @@ import cbcm
 import cbcm_block
 import cbcm_post
 import chip_post
+import chip_timing
 import ro_post
 import lsplit
 import pnp_thermo
@@ -194,16 +196,56 @@ def run_chip():
     expect_max('chip RO 3 run: taps, RO mux, OUT swing', worst(ro3['swing'].values()), 1.0, 'V')
 
 
+def run_timing():
+    r = chip_timing.main(reuse='--reuse' in sys.argv[1:])
+    el = r['elmore']
+    # unsimulated wire resistance, bound: SCK to the buffer inputs, then the capture buffer to its flop
+    tau = el['SCK'] + max(v for k, v in el.items() if k != 'SCK')
+    # lateral coupling on one buffer alone: the largest insertion delay increase of a buffer in the
+    # lateral run (all clocks + 2x lateral) over the scan run; TT and the hold corners take the larger
+    lat = {c: max(r[('lateral', c, t)]['ins_by_buf'][b] - r[('scan', c, t)]['ins_by_buf'][b]
+                  for b in r[('scan', c, t)]['ins_by_buf'])
+           for c, t, v in chip_timing.CORNERS if ('lateral', c, t) in r}
+    for corner, temp, vdd in chip_timing.CORNERS + chip_timing.HOLD_CORNERS:
+        s, d = r[('scan', corner, temp)], r[('dff', corner, temp)]
+        skew = max(0.0, lat.get(corner, max(lat.values())))
+        tag = f'{corner} {temp} C {vdd:g} V'
+        expect(f'timing {tag}: lines wrong after SLEs / mid shift', sum(map(len, s['after'])) + sum(map(len, s['mid'])), 0, 0)
+        expect(f'timing {tag}: read-back bits wrong (of {s["readback_n"]})', s['readback_bad'], 0, 0)
+        expect(f'timing {tag}: shift flop changes off the bit stream (of {s["shift_checked"]})',
+               s['shift_wrong'] + s['multi'] + s['stray'], 0, 0)
+        # the hold time of DFFPOSX1 alone must stay below the shortest race by more than the bounds
+        expect_min(f'timing {tag}: hold slack - RC bound - one-buffer lateral ({s["race_pair"]})',
+                   (s['race_min'] - d['hold'] - tau - skew) * 1e12, 0, 'ps')
+        expect_max(f'timing {tag}: shortest SCK period (max race + setup)', (s['race_max'] + d['setup']) * 1e9,
+                   chip_post.PER * 1e9, 'ns')
+        expect_max(f'timing {tag}: SCK port -> OUT port (read-back)', s['readback_max'] * 1e9, chip_post.PER / 2 * 1e9, 'ns')
+        expect_min(f'timing {tag}: SDI hold slack at sr[0]', (s['sdi_after_min'] - d['hold']) * 1e9, 0, 'ns')
+        expect_min(f'timing {tag}: SDI setup slack at sr[0]', (s['sdi_before_min'] - d['setup']) * 1e9, 0, 'ns')
+        if ('lateral', corner, temp) in r:
+            b = r[('lateral', corner, temp)]
+            expect_min(f'timing {tag}: hold slack - RC bound, clocks + 2x lateral', (b['race_min'] - d['hold'] - tau) * 1e12, 0, 'ps')
+        if ('ro', corner, temp) not in r:
+            continue
+        ro = r[('ro', corner, temp)]
+        # a stage that missed one toggle in the window would be off by >= 1/40 (stage 0: >= 40 periods)
+        expect_min(f'timing {tag}: divider stages with 2 whole periods in 1.2 us', len(ro['stages']), 4)
+        expect_max(f'timing {tag}: divider stage period / (2^k x RO 0 period) - 1',
+                   max(abs(x - 1) for x in ro['stages'].values()) * 100, 0.2, '%')
+        expect_min(f'timing {tag}: RO mux swing (rail to rail)', (ro['mux_max'] - ro['mux_min']) / vdd * 100, 90, '%')
+        expect(f'timing {tag}: RO 0 run enables wrong (RO_EN0 only)', len(ro['en_wrong']), 0, 0)
+
+
 STEPS = dict(tg=run_tg, array=run_array, kelvin=run_kelvin, post=run_post, cbcm=run_cbcm, cbcm_block=run_cbcm_block,
              cbcm_post=run_cbcm_post, ro=run_ro, ro_post=run_ro_post, scan=run_scan, pnp=run_pnp, lsplit=run_lsplit,
-             chip=run_chip)
+             chip=run_chip, timing=run_timing)
 OPTIONAL = {'post': array_post.KELVIN_R, 'cbcm_post': cbcm_post.CJSON,      # default only when their input exists
             'ro_post': ro_post.GDS}
-ASKED = {'chip'}                                                            # only when named (about 45 min)
+ASKED = {'chip', 'timing'}                                                  # only when named (45 / 75 min)
 
 
 def main():
-    names = sys.argv[1:] or [n for n in STEPS if n not in ASKED and (n not in OPTIONAL or os.path.exists(OPTIONAL[n]))]
+    names = [a for a in sys.argv[1:] if a != '--reuse'] or [n for n in STEPS if n not in ASKED and (n not in OPTIONAL or os.path.exists(OPTIONAL[n]))]
     for n in names:
         t = time.time()
         print(f"\n== {n}", flush=True)
