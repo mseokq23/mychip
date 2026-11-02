@@ -12,6 +12,8 @@ chip_check.py     금속 연결 검사(끊김, 단락, 떠 있는 금속, 별 �
 chip_lvs.py       패드 링 안 전체의 소자 수준 LVS(KLayout, ETRI Calibre LVS 덱의 소자 인식) → build/chip_lvs.log,
                   build/pdkv_core_lvs.lvsdb(KLayout 넷리스트 브라우저), --spice로 그린 그대로의 넷리스트
 chip_lvs_selftest.py  레이아웃·기준에 오류 31가지를 하나씩 넣어 chip_lvs.py가 모두 불일치로 잡는지 확인(약 3분)
+device_map.py     chip_lvs.py가 뽑은 소자(그린 그대로)를 블록 > 종류·크기 > 소자로 묶은 마커 DB → build/pdkv_devices.lyrdb
+                  (KLayout Marker Browser, 아래 "KLayout에서 소자 보기")
 run_chip.sh       입력이 없으면 만들고(패드 링, 직결 소자, PDK 셀, 어레이, CBCM, RO 뱅크·저항 RO) 조립 → 공식 규칙 덱 → 문서 기준 금속 규칙
                   → 연결 검사 → 안테나(scripts/antenna_rules.py) → 소자 수준 LVS(chip_lvs.py) → … → 제출 GDS 검사(gds_check.py)가
                   통과하면 제출 파일 build/pdkv_Top.zip
@@ -208,6 +210,20 @@ Codespace(IIC-OSIC-TOOLS: KLayout·파이썬 모듈 0.30.12, Magic 8.3.685, 킷 
 | 안테나, 문서 값 | 넘는 넷 6개, 모두 VDD·VSS(금속1·2·3)이고 단계마다 확산에 닿아 있다. 전원 격자 금속은 넓은데 거기 묶인 게이트(제어 블록의 상수 입력 등)는 작아 비가 크게 나온다. 확산 없이 넘는 넷 0. 신호 넷 최대: poly 22, 금속1 182(RO 뱅크 배선 RO의 사행선 넷, 완성 칩, 확산 있음)·127(ROW_SEL8, 식각 단계, 확산 없음), 금속2 210(ROW_SEL11)·185, 금속3 326(제어 블록 안 넷, 확산 있음)·42(LG, 확산 없음) |
 
 패드 셀을 ETRI GDS로 바꾸기 전(2026-11-01, 86 s)에는 공식 덱이 46개(위 5.NSD.S1 14개 포함)였고 나머지 항목은 지금과 같았다. 저항 RO를 넣기 전(RO 뱅크까지, 77 s)에는 블록 11개, 연결 검사 넷 83개(점 229개)였고 DRC·문서 규칙·안테나 신호 최대는 그때와 같다(전원 넷 금속1 비 VSS 1802·VDD 1821 → 1866·1838). RO 뱅크를 넣기 전(PR #14, Codespace 108 s)에는 블록 10개, 연결 검사 넷 75개(점 214개), 안테나 금속1 신호 최대 142(ROW_SEL8)였다. 전원 넷의 비는 그때 VSS 금속1 11211·VDD 5068에서 지금 1802·1821로 줄었다: RO 뱅크가 VDD·VSS에 묶은 NAND·NOR의 B 입력 게이트가 분모에 더해졌다. CBCM을 넣기 전(PR #13, 101 s)에는 블록 9개, 연결 검사 넷 62개(점 183개)였다(안테나 수치는 CBCM 전과 같다). 어레이를 넣기 전(PR #12, 82 s)에는 블록 8개, 연결 검사 넷 17개(점 50개)였고, 실링을 넣기 전(PR #11, 77 s)에는 칩 범위가 패드 링과 같은 97.5–1802.5 µm, 연결 검사 넷 16개(점 47개)였다.
+
+### KLayout에서 소자 보기
+
+`run_chip.sh` 뒤 Codespace의 noVNC 데스크톱에서(`klayout-etri`는 `scripts/etri050-env.sh`):
+
+```bash
+python3 designs/etri050/chip/device_map.py      # 약 5 s → build/pdkv_devices.lyrdb
+klayout-etri designs/etri050/chip/build/pdkv_Top.gds \
+  -m designs/etri050/chip/build/pdkv_devices.lyrdb \
+  -mn designs/etri050/chip/build/pdkv_core_lvs.lvsdb
+```
+
+- Marker Browser(`-m`, `device_map.py`): Directory의 By Category 아래에 블록 10개가 있다. L-split 2, MOS-C 4, PNP1 1, PNP2 1, 히터 1, Kelvin 어레이 456, CBCM 133, RO 뱅크 400, 저항 RO 100, 제어 블록 2007이다. 그 아래는 종류·크기(예: NFET W 9 L 0.6)이고, 그 아래가 소자 하나하나다. 소자를 누르면 화면이 그 자리로 가고, Info에 크기·단자 넷·나머지 매개변수가 나온다(넷은 기준 넷리스트 이름, 예: L-split `NFET W=9 L=0.6; S=D1 G=LG D=S B=VSS`). 합계 NFET 1504, PFET 1567, P2RES 31, PIP 1, PNP 2는 `chip_lvs.py`가 센 그린 개수와 같다. 소자의 블록은 상자 가운데를 담은 최상위 인스턴스로 정한다. 패드 링(ETRI GPIO 셀)은 LVS처럼 빠진다.
+- Netlist Browser(`-mn`): LVS 결과다. Cross Reference 탭의 `pdkv_Top ⇔ PDKV_CORE`가 초록이면 일치다. 병렬 핑거를 합친 소자 쌍 2871개와 넷 1374개가 있고, 넷을 누르면 배선 전체가 강조된다.
 
 ## 다음 단계
 
