@@ -12,17 +12,19 @@ not into the repository.
 build/calibre/ (and build/pdkv_calibre.tar.gz of it):
   NSPL_0p5um_Analog_CMOS_2P3M_5V_V1.1_{DRC,ANT,LVS}.cal   ETRI's decks, unchanged
   pong_pt1_Top_Pad.gds, pong_pt1_Pad.drc.summary.etri    the chip ETRI checked, and ETRI's summary of it
-  pdkv_Top.gds                    the chip (build/pdkv_Top.gds)
-  pdkv_Top_noseal.gds             the same without seal ring and chip boundary, as PDKV_SEAL=0 builds it
+  pdkv_Top.gds                    the chip (build/pdkv_Top.gds; as submitted: no seal ring, no chip boundary)
+  pdkv_Top_noseal.gds             only from a chip built with PDKV_SEAL=1: the same without its seal ring and
+                                  chip boundary, as the default build makes it
   pdkv_Core.gds, pdkv_Core.cdl    the core's LVS inputs (lvs_inputs.py)
   drc_pong.cal                    1. pong_pt1 with ETRI's settings: the counts must be ETRI's (setup check)
-  drc_pdkv_Top.cal, drc_pdkv_Top_noseal.cal   2. our chip, both variants, the same settings
+  drc_pdkv_Top.cal (, drc_pdkv_Top_noseal.cal)   2. our chip, the same settings
   ant_pdkv_Top.cal                3. the antenna deck (the PDK's runant.com hands the deck to Calibre
                                      without a header, but the deck's LAYOUT lines are comments)
   lvs_pdkv_Core.cal               4. LVS of the core (the PDK's lvs_header.cal, our files, VDD/VSS by name)
   run_calibre.sh                  runs 1-4 as the design guide does (calibre -drc -hier / -lvs -hier)
-  compare.py, expected.json       sorts the results: ETRI's pad cells, the seal ring (the deck waives its
-                                  contact and via widths), known (CBCM n+ cells, 1.PWL.bad2), unexpected
+  compare.py, expected.json       sorts the results: ETRI's pad cells, the seal ring if there is one (the
+                                  deck waives its contact and via widths), known (CBCM n+ cells, 1.PWL.bad2),
+                                  unexpected
 
 usage: python3 designs/etri050/chip/calibre/make_run.py [--gds build/pdkv_Top.gds] [--out build/calibre]
        (the kit from $ETRI050_DK, <repo>/.pdk/ETRI050_DesignKit or ~/ETRI050_DesignKit, as run_chip.sh)
@@ -131,7 +133,8 @@ def decks(kit, out):
 
 
 def noseal(gds, out):
-    """pdkv_Top without the seal ring instance and the chip boundary (layer 0), as assemble.py -rd seal=0."""
+    """pdkv_Top without the seal ring instance and the chip boundary (layer 0), as assemble.py builds it by
+    default; False (nothing written) when the chip has no seal ring."""
     ly = kdb.Layout()
     ly.read(str(gds))
     top = ly.top_cell()
@@ -198,7 +201,7 @@ def main(argv=None):
         what="2a. pdkv_Top as submitted", gds="pdkv_Top.gds", top="pdkv_Top", out="pdkv_Top"))
     if has_seal:
         (out / "drc_pdkv_Top_noseal.cal").write_text(DRC_HEADER.format(
-            what="2b. pdkv_Top without seal ring and chip boundary (PDKV_SEAL=0)", gds="pdkv_Top_noseal.gds",
+            what="2b. pdkv_Top without seal ring and chip boundary (as the default build)", gds="pdkv_Top_noseal.gds",
             top="pdkv_Top", out="pdkv_Top_noseal"))
     (out / "ant_pdkv_Top.cal").write_text(ANT_HEADER)
     (out / "lvs_pdkv_Core.cal").write_text(LVS_HEADER)

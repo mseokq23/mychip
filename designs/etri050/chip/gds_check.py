@@ -1,14 +1,27 @@
 #!/usr/bin/env python3
 """Submission checks of the chip GDS that no DRC deck makes: the file, its layers, grid, cells and labels.
 
-  file     one top cell, pdkv_Top; database unit 1 nm; its extent the CHIPBOUNDARY (layer 0) of
-           1.9 x 1.9 mm with the origin at its lower left corner
+The frame is the MyChip standard chip of the 2026-4 announcement: 1.9 x 1.9 mm including a 120 um
+scribe lane, bond pads as in the PDK's MPW_PAD_28pin (the only placement that is packaged, 28-pin SOP).
+The PDK's MPW_PAD_28pin.gds has the origin at the frame's lower left corner and marks the boxes 0-1900
+and 60-1840 um on TEXT (48): the outer 60 um on each side is the scribe lane.
+
+  file     one top cell, pdkv_Top; database unit 1 nm; either no CHIPBOUNDARY (layer 0) and the extent
+           inside the scribe lane's inner edge (60-1840 um; the default build, as ETRI's template and the
+           fabricated precedents), or (assemble.py -rd seal=1) one CHIPBOUNDARY box 0-1900 um = the extent
+  scribe lane  no shape and no text of any layer but CHIPBOUNDARY outside 60-1840 um (a seal ring there
+           fails: it is in the lane)
+  bond pads  the PAD (37) openings are those of the PDK's MPW_PAD_28pin.gds (XOR empty, 28)
+  design area  information: the box inside the pads' inner (core side) edges and the extent of
+           everything but the pad ring (the core; its wires end on the pads' ports, a little past that
+           edge); the announcement gives about 1.0 x 1.0 mm with the GPIO cells
   layers   every layer / datatype is in the PDK's layer map (NSPL_..._V1p1.layermap, all datatype 0),
            and none of the map's layers that are not a designer's: NODRC (58: Calibre leaves its area
            out of every check), KEY (1) and DUMMY0-9 (100-109)
-  grid     every vertex of every shape and every placement on the 0.01 um design grid (rule document
-           3.3; ETRI's Calibre deck checks OFFGRID per layer, the kit's KLayout deck does not); text
-           positions are no geometry and are only counted
+  grid     every vertex of every shape, every placement and every text position on the 0.01 um design
+           grid (rule document 3.3 and the announcement's minimum grid; ETRI's Calibre deck checks
+           OFFGRID per layer, the kit's KLayout deck does not; texts are no geometry, but assemble.py
+           puts them on it too)
   shapes   every edge orthogonal or at 45 degrees (rule document 3.3); paths with a width that is an
            even number of grid steps, extensions on the grid and no round ends (else their outline
            leaves the grid)
@@ -27,7 +40,8 @@
            other layers and inside cells are counted
 
 usage: python3 designs/etri050/chip/gds_check.py [--gds build/pdkv_Top.gds] [--gpio <ETRI GPIO gds>]
-       exit 0 when nothing fails (the cell-name list is information)
+       [--pads <MPW_PAD_28pin.gds>]
+       exit 0 when nothing fails (the cell-name list and the design area are information)
 """
 import argparse
 import collections
@@ -50,35 +64,134 @@ LABEL_LAYERS = (41, 42, 44, 46, 47)
 RESERVED = {1, 58} | set(range(100, 110))                      # KEY, NODRC, DUMMY0-9
 GRID_NM = 10
 DIE_UM = 1900.0
+SCRIBE_UM = 60.0                                               # half the 120 um scribe lane, on each side
 PREFIX = "pdkv_"
 GPIO_IN_KIT = "pads_ETRI/GDS/ETRI_NSPL_GPIO_250610.gds"
+PADS_IN_KIT = "pads_ETRI/GDS/MPW_PAD_28pin.gds"
+PAD_LAYER = 37
+PAD_RING = "pdkv_Pad"
+
+
+def kit_file(rel):
+    """A file of the kit, the kit found as run_chip.sh finds it."""
+    for kit in (os.environ.get("ETRI050_DK"), HERE.parents[2] / ".pdk/ETRI050_DesignKit", Path.home() / "ETRI050_DesignKit"):
+        if kit and (Path(kit) / rel).exists():
+            return Path(kit) / rel
+    return None
 
 
 def gpio_default():
-    """The kit's GPIO library, the kit found as run_chip.sh finds it."""
-    for kit in (os.environ.get("ETRI050_DK"), HERE.parents[2] / ".pdk/ETRI050_DesignKit", Path.home() / "ETRI050_DesignKit"):
-        if kit and (Path(kit) / GPIO_IN_KIT).exists():
-            return Path(kit) / GPIO_IN_KIT
-    return None
+    return kit_file(GPIO_IN_KIT)
+
+
+def pads_default():
+    return kit_file(PADS_IN_KIT)
 
 
 def off_grid(points):
     return sum(1 for p in points if p.x % GRID_NM or p.y % GRID_NM)
 
 
-def check(gds, gpio):
+def shapes_rec(cell, li, texts=False):
+    """The shapes of a layer under a cell, in its coordinates: boxes, polygons and paths, or the texts."""
+    it = cell.begin_shapes_rec(li)
+    it.shape_flags = kdb.Shapes.STexts if texts else kdb.Shapes.SRegions
+    return it
+
+
+def check(gds, gpio, pads=None):
     ly = kdb.Layout()
     ly.read(str(gds))
     out, bad = [], False
     tops = ly.top_cells()
     top = tops[0]
     die = kdb.DBox(0, 0, DIE_UM, DIE_UM)
-    bnd = kdb.Region(top.begin_shapes_rec(ly.layer(0, 0))).merged()
-    ok = (len(tops) == 1 and top.name == "pdkv_Top" and abs(ly.dbu - 0.001) < 1e-12
-          and bnd.count() == 1 and bnd.bbox().to_dtype(ly.dbu) == die and top.dbbox() == die)
+    inner = kdb.DBox(SCRIBE_UM, SCRIBE_UM, DIE_UM - SCRIBE_UM, DIE_UM - SCRIBE_UM)
+    l0 = ly.find_layer(0, 0)
+    bnd = kdb.Region(shapes_rec(top, l0)).merged() if l0 is not None else kdb.Region()
+    if bnd.is_empty():
+        form, fits = "no CHIPBOUNDARY", top.dbbox().inside(inner)
+    else:
+        form = f"CHIPBOUNDARY {bnd.count()} shape(s) {bnd.bbox().to_dtype(ly.dbu)}"
+        fits = bnd.count() == 1 and bnd.bbox().to_dtype(ly.dbu) == die and top.dbbox() == die
+    ok = len(tops) == 1 and top.name == "pdkv_Top" and abs(ly.dbu - 0.001) < 1e-12 and fits
     bad |= not ok
-    out.append(f"file: top cells {[c.name for c in tops]}, dbu {ly.dbu * 1000:g} nm, extent {top.dbbox()}, "
-               f"CHIPBOUNDARY {bnd.count()} shape(s) {bnd.bbox().to_dtype(ly.dbu)} -> {'ok' if ok else 'WRONG'}")
+    out.append(f"file: top cells {[c.name for c in tops]}, dbu {ly.dbu * 1000:g} nm, extent {top.dbbox()}, {form}"
+               f" -> {'ok' if ok else 'WRONG'}")
+
+    # scribe lane: nothing but CHIPBOUNDARY outside the box 60-1840 um
+    keep = kdb.Region(inner.to_itype(ly.dbu))
+    lane = []
+    for li in ly.layer_indexes():
+        info = ly.get_info(li)
+        if (info.layer, info.datatype) == (0, 0):
+            continue
+        r = kdb.Region(shapes_rec(top, li))
+        if not r.is_empty() and not r.bbox().to_dtype(ly.dbu).inside(inner):
+            o = r - keep
+            if not o.is_empty():
+                lane.append(f"{LAYERMAP_NAMES.get(info.layer, info.layer)} {o.count()} in {o.bbox().to_dtype(ly.dbu)}")
+        it = shapes_rec(top, li, texts=True)
+        nt = 0
+        while not it.at_end():
+            t = it.shape().text.transformed(it.trans())
+            if not inner.contains(kdb.DPoint(t.x * ly.dbu, t.y * ly.dbu)):
+                nt += 1
+            it.next()
+        if nt:
+            lane.append(f"{LAYERMAP_NAMES.get(info.layer, info.layer)} texts {nt}")
+    bad |= bool(lane)
+    out.append(f"scribe lane (outer {SCRIBE_UM:g} um, the 120 um lane of the 1.9 mm chip): "
+               + ("nothing but CHIPBOUNDARY in it" if not lane else "shapes in it: " + "; ".join(lane)))
+
+    # bond pads: the PAD openings of the standard chip MPW_PAD_28pin
+    lp = ly.find_layer(PAD_LAYER, 0)
+    mine = kdb.Region(shapes_rec(top, lp)).merged() if lp is not None else kdb.Region()
+    if pads:
+        ref = kdb.Layout()
+        ref.read(str(pads))
+        rp = ref.find_layer(PAD_LAYER, 0)
+        std = kdb.Region(shapes_rec(ref.top_cells()[0], rp)).merged() if rp is not None else kdb.Region()
+        std.transform(kdb.ICplxTrans(ref.dbu / ly.dbu))
+        diff = mine ^ std
+        ok = mine.count() == 28 and std.count() == 28 and diff.is_empty()
+        out.append(f"bond pads: {mine.count()} PAD openings, {std.count()} in {Path(pads).name}, "
+                   + ("the same (XOR empty)" if diff.is_empty() else f"XOR {diff.count()} in {diff.bbox().to_dtype(ly.dbu)}")
+                   + f" -> {'ok' if ok else 'WRONG'}")
+    else:
+        ok = False
+        out.append(f"bond pads: {mine.count()} PAD openings; MPW_PAD_28pin.gds not found: not compared")
+    bad |= not ok
+
+    # design area (information): the pads' inner edges and the extent of the rest
+    if ly.has_cell(PAD_RING):
+        ring_cell = ly.cell(PAD_RING)
+        boxes = []                                    # the ring's cells (pads, corners, fillers) in the chip
+        for pi in top.each_inst():
+            if pi.cell.cell_index() == ring_cell.cell_index():
+                for si in ring_cell.each_inst():
+                    for t in si.cell_inst.each_cplx_trans():
+                        boxes.append(si.cell.bbox().transformed(pi.cplx_trans * t))
+        ring = kdb.Box()
+        for b in boxes:
+            ring += b
+        # the pads are the cells on the ring's outer edge; the core side of each is its inner edge
+        edge = kdb.Box(max((b.right for b in boxes if b.left == ring.left), default=ring.left),
+                       max((b.top for b in boxes if b.bottom == ring.bottom), default=ring.bottom),
+                       min((b.left for b in boxes if b.right == ring.right), default=ring.right),
+                       min((b.bottom for b in boxes if b.top == ring.top), default=ring.top)).to_dtype(ly.dbu)
+        rest = kdb.Region()
+        skip = [c.cell_index() for c in ly.each_cell() if c.name in (PAD_RING, "pdkv_SEAL")]
+        for li in ly.layer_indexes():
+            if (ly.get_info(li).layer, ly.get_info(li).datatype) == (0, 0):
+                continue
+            it = shapes_rec(top, li)
+            it.unselect_cells(skip)
+            rest += kdb.Region(it)
+        rb = rest.bbox().to_dtype(ly.dbu)
+        out.append(f"design area: inside the pads' inner edges {edge} ({edge.width():g} x {edge.height():g} um); "
+                   f"the core {rb} ({rb.width():g} x {rb.height():g} um: its wires end on the pads' ports, past "
+                   f"that edge by {max(edge.left - rb.left, rb.right - edge.right, edge.bottom - rb.bottom, rb.top - edge.top):g} um at most)")
 
     used = {}
     for li in ly.layer_indexes():
@@ -140,7 +253,7 @@ def check(gds, gpio):
                 trans.append(f"{c.name}/{i.cell.name} {t}")
             if i.is_regular_array() and any(v % GRID_NM for v in (i.a.x, i.a.y, i.b.x, i.b.y)):
                 pitch.append(f"{c.name}/{i.cell.name}")
-    bad |= bool(angle) or bool(paths) or bool(trans) or bool(pitch)
+    bad |= bool(angle) or bool(paths) or bool(trans) or bool(pitch) or bool(tgrid)
     out.append("shapes: " + ("every edge orthogonal or 45 degrees" if not angle else "edges at other angles: " + ", ".join(
                f"{c} layer {l}: {k}" for (c, l), k in sorted(angle.items(), key=str)[:20]))
                + f"; paths {npath}" + (f", off the grid or round: {paths[:10]}" if paths else "")
@@ -226,8 +339,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--gds", type=Path, default=HERE / "build/pdkv_Top.gds")
     ap.add_argument("--gpio", type=Path, default=gpio_default())
+    ap.add_argument("--pads", type=Path, default=pads_default())
     a = ap.parse_args(argv)
-    ok, out = check(a.gds, a.gpio)
+    ok, out = check(a.gds, a.gpio, a.pads)
     print("\n".join(out))
     return 0 if ok else 1
 
