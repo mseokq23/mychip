@@ -8,8 +8,9 @@ tb/tb_teg_ctrl.v        자체 판정 테스트벤치 (RTL과 게이트 수준 �
 cell_area.py            게이트 넷리스트의 셀 수와 LEF 면적 합
 layout/teg_ctrl.cel2    qflow 핀 배치 힌트 (변별 핀 묶음, 위 변 구간)
 run_flow.sh             qflow 배치·배선 + 킷 DRC·LVS·스택 비아 검사 + 평탄화 DRC·공식 규칙 KLayout DRC(같은 넷 홈을 메운 사본, 0.01 µm 격자에 맞춘 사본 포함)
-freeze_macro.sh         격자에 맞춘 GDS와 핀 목록을 칩 조립용 매크로(macro/)로 고정
-macro/                  teg_ctrl.gds.gz(칩 조립이 읽는 블록 GDS), teg_ctrl_pins.txt(핀 사각형)
+freeze_macro.sh         격자에 맞춘 GDS와 핀 목록, 배치·배선한 넷리스트를 칩 조립용 매크로(macro/)로 고정
+macro/                  teg_ctrl.gds.gz(칩 조립이 읽는 블록 GDS), teg_ctrl_pins.txt(핀 사각형),
+                        teg_ctrl.v·teg_ctrl.spc(그 GDS를 만든 게이트 넷리스트와 qflow LVS가 비교한 SPICE)
 strip_port_wires.py     qflow 넷리스트의 중복 포트 선언을 빼서 Icarus로 시뮬레이션하게 함
 Makefile                sim / synth / gatesim / flow / qflowsim
 ```
@@ -102,3 +103,5 @@ make qflowsim  # qflow가 합성한 넷리스트(배치·배선에 들어간 것
 - `scripts/snap_grid.py`는 격자 밖 좌표(모두 0.005 µm의 홀수배)를 0.005 µm 올린다. 같은 규칙을 모든 층에 쓰므로 변의 순서가 바뀌지 않고, 거리는 한쪽 끝만 격자 밖일 때만 0.005 µm 변한다. 그런 거리는 0.005 µm의 홀수배라 격자 위 값인 규칙 최솟값과 같을 수 없어서, 최솟값을 지키던 거리는 계속 지킨다. 0.6·0.8 µm 정사각형 접촉·비아는 두 변이 같이 움직여 크기가 그대로다. 스크립트는 층마다 도형 수와 접촉·비아가 금속 안에 있는지를 전후로 비교해 하나라도 바뀌면 쓰지 않는다. 결과는 위 표와 같고, 공식 규칙 덱 표시도 0이다.
 - `freeze_macro.sh`가 `teg_ctrl_F_grid.gds`를 `macro/teg_ctrl.gds.gz`로, qflow 레이아웃 라벨의 핀 사각형을 `macro/teg_ctrl_pins.txt`로 고정한다. 칩 조립(`chip/assemble.py`)은 이 매크로를 읽으므로 qflow를 다시 돌려도 칩 쪽 핀 위치가 몰래 바뀌지 않는다. 다시 돌린 결과와 매크로는 `klayout -b -r scripts/gds_xor.py -rd a=<gds> -rd b=<gds>`로 도형을 비교한다(GDS 파일은 시각 정보 때문에 바이트로는 달라진다).
 - 2026-11-01 Codespace에서 `make flow`를 처음부터 다시 돌린 `teg_ctrl_F_grid.gds`와 매크로는 모든 층의 XOR 면적이 0이다(배치·배선이 같은 입력에서 같은 결과를 냄).
+- 넷리스트도 함께 고정한다(2026-11-02). qflow는 배치 뒤 팬아웃 버퍼를 셀 위치에 맞춰 다시 나누므로 합성만 다시 해서는 매크로의 넷리스트가 나오지 않는다(다른 기계에서 GrayWolf 배치를 다시 하면 필러 수부터 달라짐). `macro/teg_ctrl.v`는 매크로를 만든 실행의 `synthesis/teg_ctrl.rtlnopwr.v`(`make qflowsim`이 시뮬레이션하는 것), `macro/teg_ctrl.spc`는 같은 실행의 `synthesis/teg_ctrl.spc`에서 킷 셀 라이브러리를 뺀 teg_ctrl 부분 회로(qflow LVS가 레이아웃과 비교한 것)다. 그 실행의 `teg_ctrl_F_grid.gds`와 매크로는 모든 층 XOR 0, qflow LVS는 "Circuits match uniquely"(11/1 15:35)였다. 셀 255개(필러 15)로 위 표와 같다. `v`에는 전원 핀이 없어 qflow `vlog2Spice`로 `spc`를 다시 만들 수 없으므로 둘 다 둔다.
+- 매크로 GDS(격자 맞춤·홈 메움 뒤)를 KLayout으로 소자 수준까지 뽑아 `macro/teg_ctrl.spc` + 킷 셀 트랜지스터 넷리스트와 비교하면 일치한다: NMOS 978·PMOS 1029개(병렬 결합 뒤 소자 쌍 1890개), 넷 1015개, 핀 70개. Magic 추출이 아닌 최종 GDS를 비교하므로 홈 메우기와 격자 맞춤이 회로를 바꾸지 않았다는 확인이기도 하다. 칩 안에서의 비교는 `../chip/chip_lvs.py`.
