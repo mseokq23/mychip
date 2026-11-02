@@ -18,7 +18,8 @@ its terminals and the result says what the metal alone connects.
   5. star nets (pdkv_nets.json 'star'): the chip is extracted again without the joint block (VSS: the
      pad ring, whose PVSS pad joins the branches) and the probe points of each branch of the net must be
      one net, and no two branches one net: the heater's return current and the PNP1 / L-split ground
-     share no metal with the core's ground;
+     share no metal with the core's ground. The Kelvin pairs are stars too: the force and the sense line
+     of the L-split's D1, S, D2 and of the array's source plate may meet only in the device block;
   6. wells on the GDS itself: every gate has one implant, PSD in an N-well or NSD outside one, and no
      bond pad but PVSS reaches p+ in the substrate (see wells()).
 
