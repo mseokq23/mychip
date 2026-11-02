@@ -1,11 +1,17 @@
 """Contact, metal and via rules (sections 4.7-4.12) as the rule document v1.1 states them, and its seal
 ring (4.21) when the layout has a chip boundary (KLayout batch).
 
-The kit's KLayout deck converts these rules with one difference that matters for hand-drawn routing:
-it checks VIA1/VIA2 spacing at 0.5 um, while the rule document asks 0.8 um (9.VIA1.S1, 11.VIA2.S1).
-This script checks rules 7-12 with the document's values, using the deck's definitions otherwise
-(wide metal = the part that survives shrinking by 4.99 um and growing back; MET1/2/3 must touch a
-cut; VIA1 must not overlap CONT; VIA2 must not overlap VIA1).
+The kit's KLayout deck converts these rules with two differences that matter for hand-drawn routing:
+it checks VIA1/VIA2 spacing at 0.5 um, while the rule document asks 0.8 um (9.VIA1.S1, 11.VIA2.S1),
+and its wide metal spacing checks (8.MET1.S2, 10.MET2.S2, 12.MET3.S2: wide metal against all metal)
+never report anything: KLayout shields two-layer checks by default, and the wide metal's own edge, being
+an edge of the metal too, shields every pair. This script checks rules 7-12 with the document's values
+and its two-layer checks unshielded, as Calibre's EXT is; on the kit's pong_pt1 GDS it then gives the
+places of ETRI's Calibre results for these rules (8.MET1.W 2, 8.MET1.S2 48 of 49, 8.MET1.bad1 27,
+10.MET2.S2 30, 10.MET2.bad1 27, 11.VIA2.S1 8 as 16 edge pairs, 12.MET3.S1 146; 10.MET2.S1 1473, Calibre
+stops at 1000). Otherwise it uses the deck's definitions (wide metal = the part that survives shrinking
+by 4.99 um and growing back; MET1/2/3 must touch a cut; VIA1 must not overlap CONT; VIA2 must not
+overlap VIA1).
 
 Seal ring: as in the deck, the outer 30 um of CHIPBOUNDARY (layer 0) is the seal ring zone and rules
 7-12 skip it. Inside it, every layer must be exactly what the 4.21 figure draws (SEAL_FIGURE, the
@@ -58,6 +64,12 @@ def check(path):
     M2UP, M2UN = wide(MET2)
     M3UP, M3UN = wide(MET3)
 
+    def sep(a, b, v):
+        """Calibre's two-layer EXT a b < v. Unshielded: the wide metal is part of the metal, so a shielded
+        check (KLayout's default, as the kit deck uses it) finds its own edge in between and reports
+        nothing; on pong_pt1 this gives ETRI's Calibre results (8.MET1.S2 48 of 49, 10.MET2.S2 30 of 30)."""
+        return a.separation_check(b, um(v), False, pya.Metrics.Euclidian, None, None, None, False)
+
     def size_not(cuts, s):
         bad = pya.Region()
         for p in cuts.each():
@@ -73,29 +85,29 @@ def check(path):
     r['7.CONT.bad1'] = CONT - MET1
     r['8.MET1.W'] = MET1.width_check(um(0.8))
     r['8.MET1.S1'] = M1UN.space_check(um(0.8))
-    r['8.MET1.S2'] = M1UP.separation_check(MET1, um(1.0))
+    r['8.MET1.S2'] = sep(M1UP, MET1, 1.0)
     r['8.MET1.bad1'] = MET1.not_interacting(CONT + VIA1)
     r['9.VIA1.W'] = size_not(VIA1, 0.8)
     r['9.VIA1.S1'] = VIA1.space_check(um(0.8))
     r['9.VIA1.E1'] = M1UN.enclosing_check(VIA1, um(0.6))
     r['9.VIA1.E3'] = M2UN.enclosing_check(VIA1, um(0.6))
-    r['9.VIA1.S'] = VIA1.separation_check(CONT, um(0.6))
+    r['9.VIA1.S'] = sep(VIA1, CONT, 0.6)
     r['9.VIA1.stack'] = VIA1 & CONT
     r['9.VIA1.bad1'] = (VIA1 - MET1) + (VIA1 - MET2)
     r['10.MET2.W'] = MET2.width_check(um(1.0))
     r['10.MET2.S1'] = M2UN.space_check(um(1.0))
-    r['10.MET2.S2'] = M2UP.separation_check(MET2, um(1.2))
+    r['10.MET2.S2'] = sep(M2UP, MET2, 1.2)
     r['10.MET2.bad1'] = MET2.not_interacting(VIA1 + VIA2)
     r['11.VIA2.W'] = size_not(VIA2, 0.8)
     r['11.VIA2.S1'] = VIA2.space_check(um(0.8))
     r['11.VIA2.E1'] = M2UN.enclosing_check(VIA2, um(0.6))
     r['11.VIA2.E3'] = M3UN.enclosing_check(VIA2, um(0.6))
-    r['11.VIA2.S'] = VIA2.separation_check(VIA1, um(0.6))
+    r['11.VIA2.S'] = sep(VIA2, VIA1, 0.6)
     r['11.VIA2.stack'] = VIA2 & VIA1
     r['11.VIA2.bad1'] = (VIA2 - MET2) + (VIA2 - MET3)
     r['12.MET3.W'] = MET3.width_check(um(1.2))
     r['12.MET3.S1'] = M3UN.space_check(um(1.0))
-    r['12.MET3.S2'] = M3UP.separation_check(MET3, um(1.2))
+    r['12.MET3.S2'] = sep(M3UP, MET3, 1.2)
     r['12.MET3.bad1'] = MET3.not_interacting(VIA2)
 
     seal = None

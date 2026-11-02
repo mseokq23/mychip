@@ -13,15 +13,21 @@ catch, on copies of the chip GDS.
   Calibre-only     MOS-C's n+ well taps removed (2.ACT.T1: no tap within 60 um); the L-split NSD pulled
                    in by 0.3 um (5.NSD.E); the heater's LVSD shortened by 0.2 um (14.PL2PR.S2: its
                    contacts no longer abut the body)
-Each fault must turn its check from clean to failing, naming the fault. ERC and the GDS checks pass as
-built; current density and the Calibre-only checks already report findings as built (the 1 mA/um
-assumption; the CBCM n+ junction cells), so their faults must add a finding of their own.
+  rules 7-12       (scripts/metal_rules.py, against the pad ring alone) the south VSS line back to its
+                   full 9 um under the CBCM: with the CBCM's generator gnd rail on it the metal is 11.8 um,
+                   wide, and the rail's fingers 0.9 um above it are too close (8.MET1.S2, 34 places; the
+                   kit deck's shielded check never reports this rule)
+Each fault must turn its check from clean to failing, naming the fault. ERC, the GDS checks and rules
+7-12 pass as built; current density and the Calibre-only checks already report findings as built (the
+1 mA/um assumption; the CBCM n+ junction cells), so their faults must add a finding of their own.
 
-usage: python3 designs/etri050/chip/checks_selftest.py [--gds build/pdkv_Top.gds]    (about 6 min)
+usage: python3 designs/etri050/chip/checks_selftest.py [--gds build/pdkv_Top.gds]    (about 7 min)
 """
 import argparse
 import contextlib
 import io
+import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -151,6 +157,11 @@ def narrow_ht(ly):
             top.shapes(m2).insert(rest)
 
 
+def wide_south(ly):
+    """The south VSS line back to 9 um under the CBCM (y 446-448.5 over x 1144-1456 added)."""
+    ly.top_cell().shapes(ly.layer(32, 0)).insert(kdb.DBox(1144, 446, 1456, 448.5).to_itype(ly.dbu))
+
+
 def run(fn, gds):
     ly = kdb.Layout()
     ly.read(str(gds))
@@ -184,6 +195,16 @@ def calibre(g):
     return code == 0, buf.getvalue()
 
 
+def metal(g):
+    """scripts/metal_rules.py (KLayout batch) with the pad ring alone as baseline: clean = nothing outside it."""
+    env = dict(os.environ)
+    env.setdefault("KLAYOUT_PATH", str(Path.home() / ".klayout"))
+    r = subprocess.run(["klayout", "-b", "-r", str(HERE.parents[2] / "scripts/metal_rules.py"), "-rd", f"gds={g}",
+                        "-rd", f"baseline={HERE / 'build/pdkv_Pad.gds'}"], capture_output=True, text=True, env=env)
+    out = r.stdout + r.stderr
+    return ", 0 not in the baseline" in out, out
+
+
 TESTS = [("ERC: SDI cut at its port", cut_port("SDI"), erc, "float"),
          ("ERC: ROW_SEL3 cut (anchor pin only)", cut_row_sel3, erc, "row_sel3 (9 gates)"),
          ("ERC: array well taps without contacts", untie_array, erc, "not a padded N-well"),
@@ -197,7 +218,8 @@ TESTS = [("ERC: SDI cut at its port", cut_port("SDI"), erc, "float"),
          ("current density: one VIA1 under heater head A", one_via, density, "HT: v1 x1, 7.00-7.00 mA per cut"),
          ("Calibre: MOS-C well taps removed", untap_mosc, calibre, "2.ACT.T1 worst distance from transistor diffusion to a tap of its well: over 60"),
          ("Calibre: L-split NSD pulled in", nsd_in, calibre, "5.NSD.E:"),
-         ("Calibre: heater LVSD shortened", lvsd_short, calibre, "14.PL2PR.S2:")]
+         ("Calibre: heater LVSD shortened", lvsd_short, calibre, "14.PL2PR.S2:"),
+         ("rules 7-12: south VSS line 9 um under the CBCM (wide metal)", wide_south, metal, "8.MET1.S2: 34")]
 
 
 def main(argv=None):
@@ -206,7 +228,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     bad = 0
     for name, check in (("ERC", erc), ("GDS", gds), ("current density (known findings only)", density),
-                        ("Calibre-only checks (known findings only)", calibre)):
+                        ("Calibre-only checks (known findings only)", calibre), ("rules 7-12", metal)):
         ok, text = check(a.gds)
         print(f"as built, {name}: {'clean' if ok else 'fails'}")
     for name, fault, check, sign in TESTS:

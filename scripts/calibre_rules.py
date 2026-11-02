@@ -15,7 +15,8 @@ derivations (PWELL is the drawn PWELL or the substrate outside every N-well, NTA
 without poly, NGATE/PGATE, the PNP collector ring, PRES_DEF, POLY1_CAP ...) and its macros:
   Width_check  INT  < v ABUT < 90 SINGULAR REGION   -> width_check
   OneSpace     EXT  < v ...                          -> space_check
-  TwoSpace     EXT a b < v ...                       -> separation_check
+  TwoSpace     EXT a b < v ...                       -> separation_check, unshielded (KLayout's default
+                                                        shielding hides pairs where b shares edges with a)
   Enc_check    ENC a b < v ... OVERLAP               -> enclosing_check (b encloses a), plus the polygons of a
                                                         that cross b (OVERLAP; KLayout does not flag them)
   NotExist     NOT INTERACT a b                      -> not_interacting
@@ -162,7 +163,9 @@ def space(lo, a, v):
 
 
 def sep(lo, a, b, v):
-    return a.separation_check(b, lo.d(v))
+    """Unshielded, as Calibre's EXT: KLayout shields by default, and where b shares edges with a (b
+    contains a, or touches it) those edges shield every pair (scripts/metal_rules.py, wide metal)."""
+    return a.separation_check(b, lo.d(v), False, kdb.Metrics.Euclidian, None, None, None, False)
 
 
 def enc(lo, inner, outer, v):
