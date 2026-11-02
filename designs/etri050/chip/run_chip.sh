@@ -13,6 +13,9 @@
 #   5. chip_check.py: metal connectivity (opens, shorts, floating metal), the 0.01 um grid, the VSS star,
 #      gates in the right well and no bond pad but PVSS on substrate p+
 #   6. scripts/antenna_rules.py: the rule document's antenna rules (3.PL1/8.MET1/10.MET2/12.MET3.ANT)
+#   7. chip_lvs.py: device-level LVS of everything inside the pad ring against the blocks' circuits, the
+#      frozen control netlist and the chip's connections (devices recognized as ETRI's Calibre LVS deck
+#      does); chip_lvs_selftest.py shows it catches errors (not run here, about 90 s)
 # Usage: [PDKV_SEAL=0] bash run_chip.sh [--rebuild]   (--rebuild remakes the inputs too)
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -64,6 +67,7 @@ klayout -b -r "$REPO/scripts/metal_rules.py" -rd gds="$B/pdkv_Top.gds" -rd basel
 klayout -b -r "$HERE/chip_check.py" -rd nets="$B/pdkv_nets.json" > "$B/chip_check.log" 2>&1
 klayout -b -r "$REPO/scripts/antenna_rules.py" -rd gds="$B/pdkv_Top.gds" -rd nets="$B/pdkv_nets.json" \
   > "$B/pdkv_Top_antenna.txt" 2>&1
+python3 "$HERE/chip_lvs.py" --gds "$B/pdkv_Top.gds" > "$B/chip_lvs.log" 2>&1
 {
   echo "pdkv chip $(date '+%Y-%m-%d %H:%M'), kit $(git -C "$KIT" log -1 --format=%h 2>/dev/null || echo unknown), $(( $(date +%s) - t0 )) s"
   grep -E '^wrote' "$B/assemble.log"
@@ -75,4 +79,6 @@ klayout -b -r "$REPO/scripts/antenna_rules.py" -rd gds="$B/pdkv_Top.gds" -rd net
   grep -E 'grid|OPEN|SHORT|FLOATING|not found|star|wells|gate |bond pad|chip check' "$B/chip_check.log"
   echo "-- antenna, rule document v1.1 (ratio per gate type, no diode credit; 'diffusion': the net reaches a junction)"
   cat "$B/pdkv_Top_antenna.txt"
+  echo "-- device-level LVS inside the pad ring (chip_lvs.py)"
+  cat "$B/chip_lvs.log"
 } | tee "$B/chip_summary.txt"

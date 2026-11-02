@@ -733,6 +733,23 @@ for p in nets['VSS']:
         p['branch'] = VSS_BRANCH.get(p['at'], 'core')
 star = [{'net': 'VSS', 'joint': 'pdkv_Pad'}]
 
+# ---- Kelvin pairs: the force and the sense line of a node meet only in its device -----------------------
+# The L-split's two drains and source and the array's source plate each have a force line from a PAD port
+# (9 um) and a sense line from a PADR port. On the metal they are one net, so chip_check.py extracts the
+# chip again without the device block: the force point and the sense point must then be two nets (a strap
+# between the two lines anywhere outside the device would put the line's drop into the sensed voltage).
+KELVIN = {'D1': ('lsplit', 'pad N2:LD1F', 'pad N3:LD1S'), 'S': ('lsplit', 'pad N4:LSF', 'pad N5:LSS'),
+          'D2': ('lsplit', 'pad N6:LD2F', 'pad N7:LD2S'), 'SRC': ('karray', 'pad W5:ASF', 'pad W6:ASS')}
+for net, (joint, force, sense) in KELVIN.items():
+    tagged = 0
+    for p in nets[net]:
+        if p['at'] in (force, sense):
+            p['branch'] = 'force' if p['at'] == force else 'sense'
+            tagged += 1
+    if tagged != 2:
+        raise RuntimeError(f'Kelvin pair {net}: {tagged} of the points {force}, {sense} found')
+    star.append({'net': net, 'joint': joint})
+
 os.makedirs(OUT, exist_ok=True)
 gds = os.path.join(OUT, 'pdkv_Top.gds')
 ly.write(gds)
