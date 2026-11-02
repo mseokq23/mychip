@@ -8,8 +8,8 @@
 #      the seal ring of rule document 4.21 unless PDKV_SEAL=0
 #   3. the kit's conversion of the official rule deck (KLayout) on the whole chip
 #   4. scripts/metal_rules.py: rules 7-12 with the rule document's values (via spacing 0.8 um, the
-#      deck uses 0.5) and the seal ring against the 4.21 figure, markers also found in the pad ring
-#      alone counted apart
+#      deck uses 0.5; wide metal spacing unshielded, the deck's check never reports) and the seal ring
+#      against the 4.21 figure, markers also found in the pad ring alone counted apart
 #   5. chip_check.py: metal connectivity (opens, shorts, floating metal), the 0.01 um grid, the VSS star,
 #      gates in the right well and no bond pad but PVSS on substrate p+
 #   6. scripts/antenna_rules.py: the rule document's antenna rules (3.PL1/8.MET1/10.MET2/12.MET3.ANT)

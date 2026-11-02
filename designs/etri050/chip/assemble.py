@@ -245,7 +245,12 @@ expect('VDD', 'ctrl vdd bar', 'm1', 541.50, 600.00)
 rect('m2', 1447.00, 1040.00, 1459.40, 1049.00)            # strap into the PVSS port (lower part)
 vias(1, 1447.00, 1040.00, 1456.00, 1049.00)
 rect('m1', 1447.00, 446.00, 1456.00, 1049.00)             # east edge
-rect('m1', 455.00, 446.00, 1456.00, 455.00)               # south edge, under the scan channel
+rect('m1', 455.00, 446.00, 1144.00, 455.00)               # south edge, under the scan channel
+# under the CBCM (x from CB[0] = 1144) 6.5 um only: the CBCM's generator gnd rail lies on this line (block
+# y -1.2 to 1.2/1.8 at CB[1] = 456, chip y 454.8-457.8) and its fingers start 0.9 um above the rail; with the
+# full 9 um the joined metal is 11.8 um tall, wide metal (>= 10 um) whose spacing is 1.0 um (8.MET1.S2,
+# 34 places). 448.5-457.8 is 9.3 um.
+rect('m1', 1144.00, 448.50, 1456.00, 455.00)
 rect('m1', 1131.60, 450.00, 1140.60, 465.00)              # up into the control block gnd bar
 port_probe('VSS', 'E5:PVSS')
 expect('VSS', 'ctrl gnd bar', 'm1', 1136.10, 600.00)
