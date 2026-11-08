@@ -23,7 +23,8 @@
 #      map, 0.01 um grid, arrays, cells, labels); when it passes, build/pdkv_Top.zip, the GDS in a zip as
 #      the announcement asks it submitted
 #  10. current_density.py: DC current density on the force and heater paths against 1 mA/um (assumed),
-#      and the current of via cuts and contacts against 1 mA/um x the cut's width (assumed too)
+#      and the current of via cuts and contacts against 1 mA/um x the cut's width (assumed too); the
+#      heater (a continuous current) at 8.3 mA against half of that (ETRI's answer to question 4)
 #  11. scripts/calibre_rules.py: the checks of ETRI's Calibre DRC deck that the kit's KLayout deck leaves
 #      out (tap distance, implant and contact enclosures, PIP, poly2 resistor contacts ...), translated from
 #      the deck; markers in the pad ring alone and in the seal ring zone counted apart
@@ -111,7 +112,7 @@ python3 "$REPO/scripts/calibre_rules.py" --gds "$B/pdkv_Top.gds" --baseline "$B/
   cat "$B/chip_erc.log"
   echo "-- the GDS file for submission (gds_check.py)"
   cat "$B/gds_check.log"
-  echo "-- DC current density, force and heater paths, 1 mA/um assumed (current_density.py)"
+  echo "-- DC current density, force and heater paths, 1 mA/um assumed, the heater at half (current_density.py)"
   cat "$B/current_density.log"
   echo "-- checks of ETRI's Calibre deck missing from the kit's KLayout deck (scripts/calibre_rules.py)"
   cat "$B/pdkv_Top_calibre_rules.txt"

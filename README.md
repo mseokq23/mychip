@@ -84,7 +84,7 @@ klayout-etri designs/etri050/teg/build/chip/teg_chip_v0.gds      # noVNC 데스�
 - 칩 GDS는 ETRI 패드 프레임 GDS를 그대로 두고, Magic이 쓴 코어 GDS를 합친 것이다.
 - 알아둘 점
   - ESD 보호가 없다. 게이트가 맨 패드에 바로 붙으니 칩을 다룰 때 정전기를 조심한다.
-  - 패키지 핀 번호는 ETRI 본딩도를 따른다. 보드를 만들기 전에 확인한다.
+  - 패키지 핀 번호는 패드 번호와 같다(내 칩 게시판 공지 #768; ETRI 답 2026-11-06이 이 게시판을 가리킴): 서쪽 위→아래 1–7, 남 8–14, 동 아래→위 15–21, 북 오른→왼 22–28.
   - 공유 소스와 드레인의 배선 저항이 측정에 들어간다. 패드 표의 square 수에 PDK의 metal 시트 저항을 곱해 보정한다.
   - 안테나 규칙은 오픈소스 덱에 없다. 공식 Calibre 덱이나 운영 측 검증으로 확인한다.
 
@@ -104,8 +104,8 @@ klayout-etri designs/etri050/teg/build/chip/teg_chip_v0.gds      # noVNC 데스�
 - 설계 DB: GDSII를 zip으로 내고 Top Cell Name을 적는다. 최소 grid 0.01 µm. 칩 제공 형태(패키지 약 20개 / bare die 30개)를 신청서에 적는다.
 - PDK: 0.5 µm Analog CMOS 2-poly 3-metal, 모델(HSPICE·Spectre) 온도 범위 25–115 °C, Calibre·Assura 덱(DRC·LVS·PEX), pcell, GPIO 9종(사용 권장), 디지털 표준셀 33종.
 - 설계를 끝낸 뒤 신청서와 설계 DB를 모아팹에 팀 단위로 접수한다. 칩은 DB 제출 약 5개월 뒤에 받는다.
-- 소개 자료는 팀당 패키지 칩 20개(28-pin SOP)와 bare die 30개라고 적었고, 4차 안내는 제공 형태를 신청서에 적게 한다. 측정할 때는 패키지 윗면을 검은 테이프 등으로 가려 빛을 막는다.
-- 공식 검증 덱은 Calibre·Assura용이다. 이 환경의 Magic·KLayout 검사는 오픈소스 변환본이니, 제출 전 검증 절차는 공고문으로 확인한다.
+- 소개 자료는 팀당 패키지 칩 20개(28-pin SOP)와 bare die 30개라고 적었고, 4차 안내는 제공 형태를 신청서에 적게 한다. ETRI 답(2026-11-06): 26-4차까지 패키지 20개·bare die 30개를 계획하고(내년부터 패키지 수량은 바뀔 수 있음), 둘은 같은 웨이퍼에서 나온다. 패키지 최대 동작 온도는 답이 없어 패키지 측정은 모델 온도 범위(25–115 °C) 안에서 한다. 측정할 때는 패키지 윗면을 검은 테이프 등으로 가려 빛을 막는다.
+- 공식 검증 덱은 Calibre·Assura용이다. 이 환경의 Magic·KLayout 검사는 오픈소스 변환본이다. ETRI 답(2026-11-06): 오픈소스 도구로 설계·신청할 수 있으나 제작 결과는 설계자 몫이고, ETRI는 DRC 검토를 따로 하지 않는다. 그래서 칩 검사(`designs/etri050/chip/README.md`)가 최종 근거이고, Calibre는 내 칩 페이지의 툴 지원이나 툴을 가진 교수님을 통해 `designs/etri050/chip/calibre/` 묶음으로 돌린다. 공정 모니터(2026년 1차 MPW TEG)와 PDK 모델 비교는 `designs/etri050/sim/blocks/pcm_compare.py`.
 
 ### 주의
 
