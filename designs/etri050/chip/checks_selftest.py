@@ -10,8 +10,9 @@ catch, on copies of the chip GDS.
                    NODRC; an edge at 30 degrees; a top-level label on MET2TXT; a metal1 square in the scribe
                    lane (the outer 60 um); one analog pad moved by 1 um (its bond pad no longer that of
                    MPW_PAD_28pin); a text 5 nm off the grid
-  current density  the HT force line narrowed to 3 um for 10 um next to its pad port (7 mA: 2.3 mA/um);
-                   14 of the 15 VIA1 cuts under the heater's head A removed (7 mA through one cut)
+  current density  one of HT's two 9 um lines narrowed to 3 um for 10 um next to its pad port (a parallel
+                   path: its current comes from cutting it in the network, over the heater's 0.5 mA/um);
+                   39 of the 40 VIA1 cuts under the heater's head A removed (8.3 mA through one cut)
   Calibre-only     MOS-C's n+ well taps removed (2.ACT.T1: no tap within 60 um); the L-split NSD pulled
                    in by 0.3 um (5.NSD.E); the heater's LVSD shortened by 0.2 um (14.PL2PR.S2: its
                    contacts no longer abut the body)
@@ -102,10 +103,11 @@ def skew(ly):
 
 
 def one_via(ly):
-    """Keep one of the 15 VIA1 cuts that join HT's metal2 to heater head A's metal1 (x 1048-1070, y 1344-1366)."""
+    """Keep one of the 40 VIA1 cuts that join HT's two metal2 lines to heater head A's metal1 (x 1048-1070,
+    y 1344-1375)."""
     top = ly.top_cell()
     v1 = ly.layer(33, 0)
-    near = list(top.shapes(v1).each_overlapping(kdb.DBox(1048, 1344, 1070, 1366).to_itype(ly.dbu)))
+    near = list(top.shapes(v1).each_overlapping(kdb.DBox(1048, 1344, 1070, 1375).to_itype(ly.dbu)))
     for s in near[1:]:
         s.delete()
 
@@ -164,7 +166,7 @@ def text_off_grid(ly):
 
 
 def narrow_ht(ly):
-    """Cut the HT line's 9 um metal2 (y 1350-1359) to 3 um over x 1440-1450 (die um), next to E7."""
+    """Cut the lower HT line's 9 um metal2 (y 1350-1359) to 3 um over x 1440-1450 (die um), next to E7."""
     top = ly.top_cell()
     m2 = ly.layer(34, 0)
     cut = kdb.Region(kdb.DBox(1440, 1353, 1450, 1359).to_itype(ly.dbu))
@@ -236,7 +238,7 @@ TESTS = [("ERC: SDI cut at its port", cut_port("SDI"), erc, "float"),
          ("GDS: an analog pad moved by 1 um", move_pad, gds, "in MPW_PAD_28pin.gds, XOR 2 in"),
          ("GDS: a text 5 nm off grid", text_off_grid, gds, "text positions off it: pdkv_Top layer 48: 1"),
          ("current density: HT line 3 um", narrow_ht, density, "HT: m2 3.00 um"),
-         ("current density: one VIA1 under heater head A", one_via, density, "HT: v1 x1, 7.00-7.00 mA per cut"),
+         ("current density: one VIA1 under heater head A", one_via, density, "HT: v1 x1, 8.30-8.30 mA per cut"),
          ("Calibre: MOS-C well taps removed", untap_mosc, calibre, "2.ACT.T1 worst distance from transistor diffusion to a tap of its well: over 60"),
          ("Calibre: L-split NSD pulled in", nsd_in, calibre, "5.NSD.E:"),
          ("Calibre: heater LVSD shortened", lvsd_short, calibre, "14.PL2PR.S2:"),

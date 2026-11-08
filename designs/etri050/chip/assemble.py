@@ -320,15 +320,46 @@ expect('CHI', 'mosc gate bar', 'm1', *mosc_at(100.0, 212.4))
 expect('CLO', 'mosc well/p+ bar', 'm1', *mosc_at(100.0, -6.9))
 
 # ---- heater: head A (east end) -> HT (E7 PAD), head B (west end) -> PVSS (E5 upper part) alone -----
-rect('m1', 1054.20, 1350.00, 1062.00, 1359.00)             # head A (x 1053.4-1055.2) extended east
-vias(1, 1055.80, 1350.00, 1062.00, 1359.00)                # cuts >= 1.8 um from the head contacts
-rect('m2', 1055.80, 1350.00, 1459.40, 1359.00)             # east into E7 PAD (y 1348.8-1396.0)
-rect('m1', 926.00, 1350.00, 933.80, 1359.00)               # head B (x 932.8-934.6) extended west
-vias(1, 926.00, 1350.00, 932.20, 1359.00)
-rect('m2', 922.00, 1150.00, 931.00, 1359.00)               # its own return line: down, kept above
-rect('m2', 922.00, 1150.00, 1425.00, 1159.00)              # the RO area (y < 1142), east, then
-rect('m2', 1416.00, 1114.00, 1425.00, 1159.00)             # into PVSS (y 1037.6-1132.4)
+# The heater carries a continuous current, so its path has twice the margin of the force lines (ETRI's
+# answer to question 4, 2026-11-06: no verified current limit, draw structures with a continuous current
+# such as heaters conservatively). At 8.3 mA (5.5 V over the lowest heater the rule document allows:
+# 6 squares x 110 ohm/sq and 16 contacts of 40 ohm at each end) every metal piece stays under 0.5 mA/um
+# (0.47 at most) and every via cut under 0.4 mA (0.21), half of the 1 mA/um (x the cut width) assumed
+# for the force lines. The lines stay 9 um wide (under the 10 um wide-metal class) and run in pairs or
+# threes; the head metal1 covers the whole 20 um head (it covered y 1350-1359 only: 3.0 of 7 mA then ran
+# along the head's 1.8 um strip to the lower contacts, 1.66 mA/um). The contacts are the PDK's single
+# column (14.PL2PR.S2: each abuts the LVSD body; 16 fit on the 20 um head): 0.52 mA each at 8.3 mA,
+# 0.31 mA at the 5 mA the measurement plan drives the heater with, the one part over half the limit.
+rect('m1', 1054.20, 1340.80, 1063.00, 1371.00)             # head A (x 1053.4-1055.2) extended east
+vias(1, 1055.80, 1350.00, 1063.00, 1359.00)                # cuts >= 2 um from the head contacts
+vias(1, 1055.80, 1362.00, 1063.00, 1371.00)
+rect('m2', 1055.80, 1350.00, 1459.40, 1359.00)             # two lines east into E7 PAD (y 1348.8-1396.0)
+rect('m2', 1055.80, 1362.00, 1459.40, 1371.00)
+rect('m1', 925.00, 1340.80, 933.80, 1371.00)               # head B (x 932.8-934.6) extended west ...
+rect('m1', 899.60, 1362.00, 933.80, 1371.00)               # ... and over the other two risers, down
+rect('m1', 899.60, 1340.80, 933.80, 1349.80)               # their tops as far as the head: a ladder of
+rect('m1', 910.80, 1340.80, 919.80, 1371.00)               # 9 um bars, no part of it 10 um wide both
+rect('m1', 899.60, 1340.80, 908.60, 1371.00)               # ways
+vias(1, 925.00, 1340.80, 931.00, 1371.00)
+vias(1, 910.80, 1340.80, 919.80, 1371.00)
+vias(1, 899.60, 1340.80, 908.60, 1371.00)
+rect('m2', 922.00, 1150.00, 931.00, 1371.00)               # its own return line: three risers down
+rect('m2', 910.80, 1150.00, 919.80, 1371.00)               # (the nearest takes the most), kept above
+rect('m2', 899.60, 1150.00, 908.60, 1371.00)               # the RO area (y < 1144), east in metal2
+rect('m2', 899.60, 1150.00, 1436.20, 1159.00)              # with a metal1 line under it (the RO bank's
+rect('m1', 899.60, 1148.00, 1432.80, 1157.00)              # VDD metal1 stops at y 1158.2), joined at the
+vias(1, 899.60, 1150.00, 908.60, 1157.00)                  # west risers and over each of three lines down
+vias(1, 910.80, 1150.00, 919.80, 1157.00)                  # into PVSS (y 1037.6-1132.4), so the line and
+vias(1, 922.00, 1150.00, 931.00, 1157.00)                  # its strap share the current as far as the last
+vias(1, 1404.80, 1150.00, 1413.80, 1157.00)                # line (the metal1 stops 1.2 um short of the
+vias(1, 1416.00, 1150.00, 1425.00, 1157.00)                # PNP1 VSS branch's metal1 at x 1434)
+vias(1, 1427.20, 1150.00, 1432.80, 1157.00)
+rect('m2', 1427.20, 1124.20, 1436.20, 1159.00)
+rect('m2', 1427.20, 1124.20, 1459.40, 1132.20)
+rect('m2', 1416.00, 1114.00, 1425.00, 1159.00)
 rect('m2', 1416.00, 1114.00, 1459.40, 1123.00)
+rect('m2', 1404.80, 1102.00, 1413.80, 1159.00)
+rect('m2', 1404.80, 1102.00, 1459.40, 1111.00)
 port_probe('HT', 'E7:HT')
 expect('HT', 'heater head A', 'm1', *heat_at(1.70, 10.80))
 expect('VSS', 'heater head B', 'm1', *heat_at(122.30, 10.80))
@@ -365,6 +396,19 @@ rect('m2', 966.80, Y0 + 17.00, 968.00, Y0 + 21.20)
 rect('m2', 959.00, Y0 + 21.20, 968.00, 1459.00)
 # drain 2 force: stub (x 971.0-972.2) -> 9 um metal2 up -> 9 um metal3 east -> N6 PAD
 rect('m2', 971.00, Y0 + 17.40, 980.00, 1429.00)
+# The force ends of the three contact strips (D1, S, D2), conservatively where the cell leaves room
+# (ETRI's answer to question 4): the cell's 1.2 um metal2 stubs widened to the 2.0 um of their landing
+# pads, D1's jog 5.6 um instead of 2.6 um high, and two more VIA1 cuts above each strip's one (metal1
+# carried 1.7 um further up beside the gate bar), so a strip's current crosses three cuts. The strips'
+# pitch (3.6-4.2 um) leaves no room for wider metal or more cuts in a row.
+for sx in (962.80, 966.40, 970.60):
+    rect('m1', sx, Y0 + 11.70, sx + 2.00, Y0 + 16.95)
+    via(1, sx + 1.00, Y0 + 14.35)
+    via(1, sx + 1.00, Y0 + 15.95)
+rect('m2', 962.80, Y0 + 11.75, 964.80, Y0 + 20.00)          # D1 stub, into the jog
+rect('m2', 947.00, Y0 + 14.40, 964.80, Y0 + 20.00)          # D1 jog
+rect('m2', 966.40, Y0 + 11.75, 968.40, Y0 + 21.20)          # S stub, into the 9 um line
+rect('m2', 970.60, Y0 + 11.75, 972.60, Y0 + 18.00)          # D2 stub, into the 9 um line
 vias(2, 971.00, 1420.00, 980.00, 1429.00)
 rect('m3', 971.00, 1420.00, 1241.90, 1429.00)
 vias(2, 1232.90, 1420.00, 1241.90, 1429.00)
@@ -512,6 +556,16 @@ def pad_to_m3(key, y_lo, y_hi):
     vias(2, xp2, y_lo, xp2 + 2.00, y_hi)
 
 
+def force_landing(key, y_lo, y_hi):
+    """A force line's landing on a west PAD port: one column of VIA2 cuts along y_lo..y_hi (the left
+    channel's ANW metal2 at x 445.4 leaves no room for a second column) under a metal3 block 9 um wide
+    (under the 10 um wide-metal class), so 5 mA crosses 14 cuts over 24 um (ADF, 0.36 mA each) or 15
+    over 25 um (ASF, 0.33 mA; the 9 um landing had 5 cuts, 1.0 mA each)."""
+    xp1, _, xp2, _ = pads[key]
+    pad_to_m3(key, y_lo, y_hi)
+    rect('m3', xp2, y_lo, xp2 + 9.00, y_hi)
+
+
 # ANW: W2 PADR -> metal2 up the left channel -> metal3 over the VDD strap -> ANW strap of the PMOS rows
 xp1, yp0, xp2, yp1 = pads['W2:ANW']
 anw_y = round((yp0 + yp1) / 2, 2)
@@ -528,7 +582,7 @@ expect('ANW', 'array ANW strap', 'm2', (nx0 + nx1) / 2, ny0 + 10.00)
 # ADF: W3 PAD -> 9 um metal3 up to the array's ADF bus (left end)
 fx0, fy0, fx1, fy1 = apin('ADF')
 xp1, yp0, xp2, yp1 = pads['W3:ADF']
-pad_to_m3('W3:ADF', yp1 - 12.00, yp1 - 3.00)
+force_landing('W3:ADF', yp1 - 27.00, yp1 - 3.00)
 rect('m3', xp2, yp1 - 12.00, fx0 + 5.00, yp1 - 3.00)
 rect('m3', fx0 - 4.00, yp1 - 12.00, fx0 + 5.00, fy1)
 port_probe('ADF', 'W3:ADF')
@@ -548,7 +602,7 @@ expect('ADS', 'array ADS line', 'm1', apin('ADS')[0] + 0.60, apin('ADS')[1] + 0.
 ex0, ey0, ex1, ey1 = apin('SRC_EDGE')
 xp1, yp0, xp2, yp1 = pads['W5:ASF']
 asf_y = round((yp0 + yp1) / 2, 2)
-pad_to_m3('W5:ASF', asf_y - 4.50, asf_y + 4.50)
+force_landing('W5:ASF', asf_y - 12.50, asf_y + 12.50)
 rect('m3', xp2, asf_y - 4.50, ex1, asf_y + 4.50)
 port_probe('SRC', 'W5:ASF')
 expect('SRC', 'array source plate', 'm3', ex0 + 20.00, ey0 + 60.00)
