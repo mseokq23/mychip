@@ -2,6 +2,8 @@
 
 브라우저 탭 하나로 Magic, KLayout, Xschem, ngspice, Netgen을 쓰는 설정이다. GitHub Codespaces가 IIC-OSIC-TOOLS 컨테이너를 띄우고, 컨테이너 안의 VNC 데스크톱을 noVNC로 브라우저에 보여 준다. ETRI 0.5 µm 오픈소스 디자인 킷은 codespace를 처음 만들 때 자동으로 받는다.
 
+제출용 최종 설계(PDK 모델 검증용 온칩 특성화 IC pdkv)와 그 Codespaces 시연은 [mseokq23/etri050-pdkv](https://github.com/mseokq23/etri050-pdkv)에 정리했다. 이 저장소는 그 설계를 만든 개발 기록이다.
+
 ```
 .devcontainer/devcontainer.json   이미지, 포트(6080), 시작 명령
 .devcontainer/start-desktop.sh    Xvnc + XFCE + noVNC 시작 (다시 실행해도 안전)
@@ -66,7 +68,7 @@ klayout-etri designs/etri050/teg/build/teg_v0.gds          # noVNC 데스크톱�
 - 표의 W/L은 흐름 확인용 초안이다. 최종 목록은 식별가능성 분석으로 정한다.
 - 결과는 `designs/etri050/teg/build/`에 생기고 git에는 올리지 않는다(코드가 원본).
 
-### 통합 TEG 칩 v0
+### 통합 TEG 칩 v0 (이전 판, 아래 pdkv로 대체)
 
 ```bash
 python3 designs/etri050/gen/etri050_teg_chip.py                  # 블록 → 배선 → DRC·LVS → 칩 GDS
@@ -88,7 +90,7 @@ klayout-etri designs/etri050/teg/build/chip/teg_chip_v0.gds      # noVNC 데스�
   - 공유 소스와 드레인의 배선 저항이 측정에 들어간다. 패드 표의 square 수에 PDK의 metal 시트 저항을 곱해 보정한다.
   - 안테나 규칙은 오픈소스 덱에 없다. 공식 Calibre 덱이나 운영 측 검증으로 확인한다.
 
-### 온칩 특성화 IC 블록 (진행 중)
+### 온칩 특성화 IC pdkv
 
 통합 TEG를 스캔 제어 + Kelvin 어레이 + CBCM + RO 뱅크 + 직결 기준 소자로 묶는 칩의 블록 검증 자료다.
 

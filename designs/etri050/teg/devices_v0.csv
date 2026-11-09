@@ -1,5 +1,5 @@
-# TEG transistor table v0 - draft for building and checking the layout flow.
-# The final W/L list comes from the identifiability analysis (pre-registered before tape-out).
+# TEG transistor table v0 - draft for building and checking the layout flow (etri050_mos.py).
+# The pdkv chip's transistors are set in designs/etri050/gen/etri050_array.py (COLUMNS) and etri050_direct.py.
 # W and L in um, multiples of 0.3 um (Magic lambda grid); W >= 1.8, L >= 0.6.
 # 18 um stands in for the PDK's 20 um reference width (20 um is off the 0.3 um grid).
 kind,w_um,l_um,note
