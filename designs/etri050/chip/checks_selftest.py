@@ -3,8 +3,10 @@
 catch, on copies of the chip GDS.
 
   ERC              the SDI route cut at its pad port (its gates float); ROW_SEL3's route cut between the
-                   control block and the array (its gates keep only chip_lvs's anchor pin, which drives
-                   nothing); the array's n+ well taps without contacts (PMOS bulks on wells no pad
+                   control block and the array (its 9 gates keep only chip_lvs's anchor pin, which drives
+                   nothing; the floating net is named row_sel3 when the array GDS carries Magic's port
+                   labels and $<n> when it does not, as with Magic 8.3.685, so the check looks for the
+                   9 gates); the array's n+ well taps without contacts (PMOS bulks on wells no pad
                    reaches); the L-split gate bar joined to the D1 drain strip (a gate on a PAD force port)
   GDS              a vertex 5 nm off the grid; a shape on a layer the PDK map does not have; a shape on
                    NODRC; an edge at 30 degrees; a top-level label on MET2TXT; a metal1 square in the scribe
@@ -226,7 +228,7 @@ def metal(g):
 
 
 TESTS = [("ERC: SDI cut at its port", cut_port("SDI"), erc, "float"),
-         ("ERC: ROW_SEL3 cut (anchor pin only)", cut_row_sel3, erc, "row_sel3 (9 gates)"),
+         ("ERC: ROW_SEL3 cut (anchor pin only)", cut_row_sel3, erc, " (9 gates)"),
          ("ERC: array well taps without contacts", untie_array, erc, "not a padded N-well"),
          ("ERC: L-split gate joined to D1", gate_to_d1, erc, "unprotected port: D1"),
          ("GDS: vertex 5 nm off grid", off_grid, gds, "off grid: pdkv_Top layer 32"),

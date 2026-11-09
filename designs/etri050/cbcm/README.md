@@ -115,7 +115,7 @@ PDK는 n+ 접합을 두 번 기술한다. 다이오드 소자 ndiode(CJ 7.12 × 
 
 셀 6과 7은 면적과 둘레의 비가 달라, 두 셀의 C–V(VCD 1.5–5 V)로 면적·측벽 성분과 그 전압 의존(MJ·MJSW)을 나눠 볼 수 있다.
 
-ETRI Calibre 덱의 1.PWL.bad2("PWELL must have not ntap")는 DIODE·BJT 표시 밖 기판(PWELL)의 poly 없는 n+ 활성을 결과로 낸다. 셀 6·7의 n+는 바로 그런 모양이라 칩 GDS에서 둘 다 걸린다(`../../../scripts/calibre_rules.py`, 킷 KLayout 덱에는 이 검사가 없음). DIODE(57)를 씌우면 PDK ndiode 셀의 고정 모양 규칙 23.NPW(p+ 고리 폭 2.0 µm, n+와 고리 사이 4.5 µm, n+ 변 2–20 µm)를 지켜야 하고 LVS에서 ndiode 소자가 된다. 시험 구조로 예외가 되는지 ETRI에 묻고(칩 README 다음 단계), 답에 따라 그대로 두거나 ndiode 모양으로 다시 그린다.
+ETRI Calibre 덱의 1.PWL.bad2("PWELL must have not ntap")는 DIODE·BJT 표시 밖 기판(PWELL)의 poly 없는 n+ 활성을 결과로 낸다. 셀 6·7의 n+는 바로 그런 모양이라 칩 GDS에서 둘 다 걸린다(`../../../scripts/calibre_rules.py`, 킷 KLayout 덱에는 이 검사가 없음). DIODE(57)를 씌우면 PDK ndiode 셀의 고정 모양 규칙 23.NPW(p+ 고리 폭 2.0 µm, n+와 고리 사이 4.5 µm, n+ 변 2–20 µm)를 지켜야 하고 LVS에서 ndiode 소자가 된다. ETRI는 DRC 검토를 따로 하지 않고 결과는 설계자 몫이라고 답했다(문의 5·9번, 2026-11-06). 그래서 그대로 둔다: DIODE는 DRC·LVS용 표시층이라 씌워도 마스크는 같고, 씌우면 시험 구조의 면적·둘레가 고정 모양에 묶인다(칩 README 결과 표).
 
 ## 측정
 
